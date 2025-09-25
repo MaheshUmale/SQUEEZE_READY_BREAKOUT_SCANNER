@@ -4,7 +4,7 @@ THIS CODE WILL DO THE BACKTESTING OF STOCKS On DAILY,WEEKLY and MONTHLY TIMEFRAM
 
 The following algorithm details the process for forecasting significant market breakouts by combining volatility compression (representing built-up energy) and volume (representing the necessary fuel), based on the analysis of historical powerful patterns  
 
-IT WILL USE 
+# IT WILL USE 
 from tvDatafeed import TvDatafeed,Interval
 #USE fetch  data from tvDatafeed ( tradingview )
 tv = TvDatafeed()
