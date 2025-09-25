@@ -1,0 +1,3 @@
+git+https://github.com/MaheshUmale/TvDataFeed_modified.git
+pandas
+pandas-ta
