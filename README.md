@@ -7,8 +7,10 @@ The following algorithm details the process for forecasting significant market b
 # IT WILL USE 
 from tvDatafeed import TvDatafeed,Interval
 #USE fetch  data from tvDatafeed ( tradingview )
-tv = TvDatafeed()
-for getting daily weekly monthly data from Tradingview.
+
+tv = TvDatafeed() //for getting daily weekly monthly data from Tradingview.
+
+
 It will do backtest for last 3 years of data.
 It will store data fetched and result in local SQLITE TABLE
 
