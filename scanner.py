@@ -4,6 +4,7 @@ from tvDatafeed import TvDatafeed, Interval
 from config import STOCKS, TIMEFRANES, DB_FILE
 from database import init_db, get_stock_data, save_stock_data, save_backtest_result, get_backtest_results, get_last_date
 import datetime
+import csv
 
 def fetch_data(symbol, timeframe):
     """
@@ -53,6 +54,10 @@ def find_breakouts(symbol):
     weekly_data = fetch_data(symbol, Interval.in_weekly)
     monthly_data = fetch_data(symbol, Interval.in_monthly)
 
+    if daily_data.empty or weekly_data.empty or monthly_data.empty:
+        print(f"Could not fetch data for {symbol}. Skipping...")
+        return
+
     # 2. Calculate TTM Squeeze on higher timeframes
     weekly_data_with_squeeze = pd.concat([weekly_data, weekly_data.ta.squeeze(lazy=True, detailed=True)], axis=1)
     monthly_data_with_squeeze = pd.concat([monthly_data, monthly_data.ta.squeeze(lazy=True, detailed=True)], axis=1)
@@ -92,16 +97,33 @@ def find_breakouts(symbol):
                         break # Move to the next squeeze period
 
 def report_results():
-    """Queries and prints the backtest results."""
+    """Queries the backtest results and saves them to a CSV file."""
     results = get_backtest_results()
+
+    # Print to console
     if not results:
         print("\nNo breakout opportunities found.")
-        return
+    else:
+        print("\n--- Backtest Results ---")
+        for row in results:
+            print(f"Symbol: {row[0]}, Breakout Date: {row[1]}, Trigger Price: {row[2]:.2f}")
+        print("----------------------")
 
-    print("\n--- Backtest Results ---")
-    for row in results:
-        print(f"Symbol: {row[0]}, Breakout Date: {row[1]}, Trigger Price: {row[2]:.2f}")
-    print("----------------------")
+    # Save to CSV
+    # check if file exists
+    try:
+        with open('nifty50_backtest_report.csv', 'x', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['Symbol', 'Breakout Date', 'Trigger Price'])
+    except FileExistsError:
+        pass
+
+    with open('nifty50_backtest_report.csv', 'a', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        if results:
+            writer.writerows(results)
+
+    print("\nBacktest report saved to nifty50_backtest_report.csv")
 
 if __name__ == "__main__":
     init_db()
