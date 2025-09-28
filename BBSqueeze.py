@@ -40,12 +40,14 @@ def generate_heatmap_json(df, output_path):
     Generates a simple, flat JSON array of stock data for the D3 heatmap.
     """
     # Ensure required columns exist for JSON generation
-    required_cols = ['ticker', 'HeatmapScore', 'SqueezeCount', 'rvol', 'URL', 'logo', 'momentum']
+    required_cols = ['ticker', 'HeatmapScore', 'SqueezeCount', 'rvol', 'URL', 'logo', 'momentum', 'highest_tf']
     for c in required_cols:
         if c not in df.columns:
             # Provide a default value if a column is missing
             if c == 'momentum':
                 df[c] = 'Neutral'
+            elif c == 'highest_tf':
+                df[c] = 'N/A'
             else:
                 df[c] = 0 if 'Score' in c or 'Count' in c or 'rvol' in c else ''
 
@@ -59,7 +61,8 @@ def generate_heatmap_json(df, output_path):
             "rvol": row['rvol'],
             "url": row['URL'],
             "logo": row['logo'],
-            "momentum": row['momentum']
+            "momentum": row['momentum'],
+            "highest_tf": row['highest_tf']
         })
 
     # Write the JSON file
@@ -74,15 +77,30 @@ OUTPUT_JSON_FIRED = 'treemap_data_fired.json'
 OUTPUT_JSON_IN_SQUEEZE = 'treemap_data_in_squeeze.json'
 TIME_INTERVAL_SECONDS = 120
 
-# Timeframes to check for a squeeze
+# --- Timeframe Configuration ---
 timeframes = ['', '|1', '|5', '|15', '|30', '|60', '|120', '|240', '|1W', '|1M']
+tf_order_map = {
+    '|1M': 10, '|1W': 9, '|240': 8, '|120': 7, '|60': 6,
+    '|30': 5, '|15': 4, '|5': 3, '|1': 2, '': 1
+}
+tf_display_map = {
+    '': 'Daily', '|1': '1m', '|5': '5m', '|15': '15m', '|30': '30m',
+    '|60': '1H', '|120': '2H', '|240': '4H', '|1W': 'Weekly', '|1M': 'Monthly'
+}
 
 # Construct select columns for all timeframes
 select_cols = [
-    'name', 'logoid', 'close', 'volume|5', 'Value.Traded|5', 'average_volume_10d_calc|5', 'MACD.macd_hist'
+    'name', 'logoid', 'close', 'volume|5', 'Value.Traded|5', 'average_volume_10d_calc|5', 'MACD.hist'
 ]
 for tf in timeframes:
     select_cols.extend([f'KltChnl.lower{tf}', f'KltChnl.upper{tf}', f'BB.lower{tf}', f'BB.upper{tf}'])
+
+
+def get_highest_squeeze_tf(row):
+    for tf_suffix in sorted(tf_order_map, key=tf_order_map.get, reverse=True):
+        if row.get(f'InSqueeze{tf_suffix}', False):
+            return tf_display_map[tf_suffix]
+    return 'Unknown'
 
 
 def load_previous_squeeze_list(filepath):
@@ -140,16 +158,18 @@ while True:
                                           (df_in_squeeze[f'BB.lower{tf}'] > df_in_squeeze[f'KltChnl.lower{tf}'])
                 squeeze_count_cols.append(col_name)
             df_in_squeeze['SqueezeCount'] = df_in_squeeze[squeeze_count_cols].sum(axis=1)
+            df_in_squeeze['highest_tf'] = df_in_squeeze.apply(get_highest_squeeze_tf, axis=1)
 
             avg_vol = df_in_squeeze['average_volume_10d_calc|5'].replace(0, np.nan)
             df_in_squeeze['rvol'] = (df_in_squeeze['volume|5'] / avg_vol).fillna(0)
-            df_in_squeeze['HeatmapScore'] = (df_in_squeeze['rvol'] + 1) * df_in_squeeze['SqueezeCount']
-            df_in_squeeze['momentum'] = 'Neutral' # Momentum is not applicable for "in squeeze"
+            df_in_squeeze['momentum'] = df_in_squeeze['MACD.hist'].apply(get_momentum_indicator)
+
+            momentum_map = {'Bullish': 1, 'Neutral': 0.5, 'Bearish': -1}
+            df_in_squeeze['HeatmapScore'] = (df_in_squeeze['rvol'] + 1) * df_in_squeeze['SqueezeCount'] * df_in_squeeze['momentum'].map(momentum_map)
 
             generate_heatmap_json(df_in_squeeze, OUTPUT_JSON_IN_SQUEEZE)
         else:
             print("No tickers found currently in a squeeze.")
-            # Write empty JSON if no stocks are in a squeeze
             generate_heatmap_json(pd.DataFrame(), OUTPUT_JSON_IN_SQUEEZE)
 
         # 3. Identify and process "Squeeze Fired" stocks
@@ -157,7 +177,6 @@ while True:
         print(f"Found {len(fired_tickers)} tickers where squeeze has fired.")
 
         if fired_tickers:
-            # We need to re-query to get the latest data at the moment of firing
             query_fired = Query().select(*select_cols).where2(col('name').is_in(fired_tickers)).set_markets('india')
             _, df_fired = query_fired.get_scanner_data()
 
@@ -168,24 +187,22 @@ while True:
                 df_fired['logo'] = df_fired['logoid'].apply(
                     lambda x: f"https://s3-symbol-logo.tradingview.com/{x}.svg" if pd.notna(x) and x.strip() else '')
 
-                # We assume it was in a squeeze on at least one timeframe.
                 df_fired['SqueezeCount'] = 1
-
                 avg_vol = df_fired['average_volume_10d_calc|5'].replace(0, np.nan)
                 df_fired['rvol'] = (df_fired['volume|5'] / avg_vol).fillna(0)
-                df_fired['momentum'] = df_fired['MACD.macd_hist'].apply(get_momentum_indicator)
-                df_fired['HeatmapScore'] = (df_fired['rvol'] + 1) * df_fired['SqueezeCount']
+                df_fired['momentum'] = df_fired['MACD.hist'].apply(get_momentum_indicator)
+
+                momentum_map = {'Bullish': 1, 'Neutral': 0.5, 'Bearish': -1}
+                df_fired['HeatmapScore'] = (df_fired['rvol'] + 1) * df_fired['SqueezeCount'] * df_fired['momentum'].map(momentum_map)
 
                 generate_heatmap_json(df_fired, OUTPUT_JSON_FIRED)
                 append_df_to_csv(df_fired, 'BBSCAN_FIRED_' + str(current_DATE) + '.csv')
                 print("--- Fired Squeeze Results ---")
                 print(df_fired[['ticker', 'momentum', 'SqueezeCount', 'rvol', 'HeatmapScore']])
             else:
-                # Write empty JSON if fired tickers couldn't be fetched
                 generate_heatmap_json(pd.DataFrame(), OUTPUT_JSON_FIRED)
         else:
             print("No squeezes fired in this interval.")
-            # Write empty JSON if no stocks have fired
             generate_heatmap_json(pd.DataFrame(), OUTPUT_JSON_FIRED)
 
         # 4. Save the current list of squeezed stocks for the next iteration
