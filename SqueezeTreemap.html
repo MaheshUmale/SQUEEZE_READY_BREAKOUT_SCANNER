@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Squeeze Stock Treemap</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- D3.js for the Treemap visualization -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+            padding: 20px;
+        }
+        .treemap-container {
+            width: 95vw;
+            height: 80vh;
+            margin: auto;
+            border: 1px solid #ddd;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            overflow: hidden;
+            background-color: white;
+        }
+        .node {
+            cursor: pointer;
+            stroke: #fff;
+            stroke-width: 1px;
+            overflow: hidden;
+            position: absolute; 
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+        .node:hover {
+            opacity: 0.9;
+            z-index: 10;
+            transform: scale(1.01);
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+        }
+        .group-header {
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: #1F2937;
+            padding: 5px;
+            text-align: left;
+            user-select: none;
+            cursor: default;
+        }
+        .tooltip {
+            position: absolute;
+            text-align: left;
+            padding: 10px;
+            background: #1F2937;
+            color: white;
+            border: 0px;
+            border-radius: 6px;
+            pointer-events: none;
+            opacity: 0;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            line-height: 1.4;
+        }
+        .treemap-title {
+            color: #4B5563;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .treemap-subtitle {
+            color: #6B7280;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10">
+
+    <div id="chart-title" class="text-center">
+        <h1 class="treemap-title text-2xl">Squeeze and Momentum Treemap</h1>
+        <p class="treemap-subtitle">
+            <span class="font-bold">Size</span> represents 5m Traded Value. 
+            <span class="font-bold">Color</span> represents **Base Momentum (R/G)**, shaded by **5m Relative Volume (RVOL)**. 
+            <br>
+            <span class="text-xs text-gray-500">Click a box to open its TradingView chart.</span>
+            Last Updated: <span id="last-update" class="font-bold">Awaiting Data</span>
+        </p>
+    </div>
+
+    <div class="treemap-container" id="treemap-container">
+        <!-- The D3 Treemap will be rendered inside this div -->
+        <svg id="treemap" width="100%" height="100%"></svg>
+    </div>
+
+    <div id="tooltip" class="tooltip"></div>
+
+    <script>
+        // Use the current client dimensions for the SVG container
+        let width, height;
+        
+        // --- 1. RVOL Shading Logic ---
+        const BULLISH_COLOR = '#10B981'; // Tailwind emerald-500 (Green)
+        const BEARISH_COLOR = '#EF4444'; // Tailwind red-500 (Red)
+        const NEUTRAL_COLOR = '#9CA3AF'; // Tailwind gray-400 (Neutral)
+
+        // Define D3 scales for RVOL shading 
+        // We want RVOL 0 to be very light, RVOL 1 to be slightly lighter, and RVOL 5+ to be the full, vibrant color.
+        const rvolIntensityScale = d3.scaleLinear()
+            .domain([0, 1.0, 5.0]) 
+            .range([0.1, 0.4, 1.0]) // Intensity factor: 0.1 (mostly light) to 1.0 (full color)
+            .clamp(true);
+
+        // Function to get the final color based on momentum and rvol
+        function getRvolShadedColor(momentum, rvol) {
+            let baseColor;
+            if (momentum.includes('G') || momentum.includes('Lg')) {
+                baseColor = BULLISH_COLOR;
+            } else if (momentum.includes('R') || momentum.includes('Lr')) {
+                baseColor = BEARISH_COLOR;
+            } else {
+                return NEUTRAL_COLOR; 
+            }
+
+            const t = rvolIntensityScale(rvol); 
+            
+            // Interpolate from a light gray (for contrast) towards the base color
+            const lightColor = d3.color(baseColor).brighter(1.5).formatHex();
+            return d3.interpolateRgb(lightColor, baseColor)(t);
+        }
+        // -----------------------------
+
+        // --- 2. OnClick Functionality ---
+        function getTradingViewUrl(ticker) {
+            // Reconstructing the URL structure based on the Python data generation logic
+            const encodedTicker = encodeURIComponent(ticker);
+            return `https://in.tradingview.com/chart/N8zfIJVK/?symbol=${encodedTicker}`;
+        }
+
+        const onclick = function(event, d) {
+            if (d.data.name) {
+                const url = getTradingViewUrl(d.data.name);
+                window.open(url, '_blank');
+            }
+        };
+        // --------------------------------
+
+        // Function to format numbers (e.g., for tooltip value)
+        const formatValue = d3.format(".2s");
+        const formatRvol = d3.format(".2f"); // Format RVOL to two decimal places
+
+        // Tooltip setup
+        const tooltip = d3.select("#tooltip");
+
+        const mouseover = function(event, d) {
+            tooltip.style("opacity", 1);
+            d3.select(this)
+                .style("stroke", "#000")
+                .style("opacity", 0.9);
+        };
+
+        const mousemove = function(event, d) {
+            if (!d.data.name) return; // Skip if it's a group node
+
+            let content = `
+                <div class="font-bold text-lg">${d.data.name}</div>
+                <div>RVOL (5m): <span class="font-mono font-bold" style="color:${getRvolShadedColor(d.data.momentum, d.data.rvol || 0)}">${formatRvol(d.data.rvol || 0)}</span></div>
+                <div>Momentum (Base): <span class="font-mono">${d.data.momentum}</span></div>
+                <div>Count: <span class="font-mono">${d.data.count}</span></div>
+                <div>Avg Intensity: <span class="font-mono">${d.data.intensity.toFixed(3)}</span></div>
+                <div>5m Traded Value: <span class="font-mono">₹${formatValue(d.data.value)}</span></div>
+            `;
+            
+            tooltip.html(content)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 10) + "px");
+        };
+
+        const mouseleave = function(event, d) {
+            tooltip.style("opacity", 0);
+            d3.select(this)
+                .style("stroke", "white")
+                .style("opacity", 1);
+        };
+
+        function renderTreemap(data) {
+            const container = document.getElementById('treemap-container');
+            width = container.clientWidth;
+            height = container.clientHeight;
+
+            // Create a root node with the data
+            const root = d3.hierarchy(data).sum(d => d.value);
+
+            // Initialize the treemap layout
+            const treemap = d3.treemap()
+                .size([width, height])
+                .paddingOuter(6)
+                .paddingTop(20)
+                .paddingInner(1);
+
+            // Compute the position of each element
+            treemap(root);
+
+            // Select the SVG container
+            const svg = d3.select("#treemap")
+                .attr("width", width)
+                .attr("height", height)
+                .attr("viewBox", `0 0 ${width} ${height}`)
+                .attr("preserveAspectRatio", "xMinYMin meet");
+
+            // Clear previous content
+            svg.selectAll("*").remove();
+            
+            // Draw all nodes (groups and leaves)
+            const node = svg.selectAll("g")
+                .data(root.leaves())
+                .join("g")
+                .attr("transform", d => `translate(${d.x0},${d.y0})`);
+
+            // Draw the rectangles (leaves)
+            node.append("rect")
+                .attr("width", d => d.x1 - d.x0)
+                .attr("height", d => d.y1 - d.y0)
+                // --- EDITED: Use RVOL Shaded Color ---
+                .attr("fill", d => getRvolShadedColor(d.data.momentum, d.data.rvol || 0)) 
+                .attr("rx", 4)
+                .attr("ry", 4)
+                .on("mouseover", mouseover)
+                .on("mousemove", mousemove)
+                .on("mouseleave", mouseleave)
+                .on("click", onclick); // ADDED: Click handler for TradingView chart
+
+            // Draw the text labels
+            node.append("text")
+                .attr("x", 4)
+                .attr("y", 16)
+                .attr("class", "text-xs font-semibold")
+                .style("fill", "white")
+                .style("pointer-events", "none")
+                .text(d => d.data.name)
+                .call(wrapText, d => d.x1 - d.x0 - 8); // Wrap text based on node width
+
+            // Draw the RVOL labels 
+            node.append("text")
+                .attr("x", 4)
+                .attr("y", 30)
+                .attr("class", "text-xs font-mono")
+                .style("fill", "rgba(255, 255, 255, 0.8)")
+                .style("pointer-events", "none")
+                .text(d => `RVOL: ${formatRvol(d.data.rvol || 0)}`)
+                .call(wrapText, d => d.x1 - d.x0 - 8);
+
+            // Draw group headers
+            svg.selectAll(".group-container")
+                .data(root.children)
+                .join("g")
+                .attr("class", "group-container")
+                .attr("transform", d => `translate(${d.x0},${d.y0})`)
+                .append("rect")
+                .attr("width", d => d.x1 - d.x0)
+                .attr("height", 20)
+                .attr("fill", d => {
+                    // Group header color remains based on Bullish/Bearish for context
+                    return d.data.name.includes('Bullish') ? '#047857' : 
+                           d.data.name.includes('Bearish') ? '#B91C1C' : 
+                           '#6B7280';
+                })
+                .attr("opacity", 0.9);
+
+            svg.selectAll(".group-container")
+                .append("text")
+                .attr("x", 4)
+                .attr("y", 14)
+                .attr("class", "group-header text-sm")
+                .style("fill", "white")
+                .text(d => d.data.name);
+
+            // Function to wrap text in SVG
+            function wrapText(text, widthFunc) {
+                text.each(function(d) {
+                    const text = d3.select(this);
+                    const width = widthFunc(d);
+                    const words = text.text().split(/\s+/).reverse();
+                    let word;
+                    let line = [];
+                    let lineNumber = 0;
+                    const lineHeight = 1.1; // ems
+                    const x = text.attr("x");
+                    const y = text.attr("y");
+                    const dy = 0;
+                    let tspan = text.text(null).append("tspan").attr("x", x).attr("y", y).attr("dy", dy + "em");
+
+                    while (word = words.pop()) {
+                        line.push(word);
+                        tspan.text(line.join(" "));
+                        if (tspan.node().getComputedTextLength() > width) {
+                            line.pop();
+                            tspan.text(line.join(" "));
+                            line = [word];
+                            tspan = text.append("tspan").attr("x", x).attr("y", y).attr("dy", ++lineNumber * lineHeight + dy + "em").text(word);
+                        }
+                    }
+                });
+            }
+        }
+
+        // Fetch data and render
+        function fetchDataAndRender() {
+            // Using a timestamp to ensure the browser doesn't cache the JSON file
+            const jsonUrl = 'treemap_data.json?t=' + new Date().getTime();
+            
+            d3.json(jsonUrl).then(data => {
+                if (data && data.children && data.children.length > 0 && 
+                    data.children.some(c => c.children && c.children.length > 0)) {
+                    renderTreemap(data);
+                    d3.select("#last-update").text(new Date().toLocaleTimeString());
+                } else {
+                    d3.select("#treemap").html('<text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#6B7280" font-size="18">No Squeeze data found or JSON is empty. Please run the Python script.</text>');
+                    d3.select("#last-update").text("No Data");
+                }
+            }).catch(error => {
+                console.error("Error loading Treemap data:", error);
+                d3.select("#treemap").html('<text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#EF4444" font-size="18">Error loading data. Run the Python script first to create treemap_data.json.</text>');
+                d3.select("#last-update").text("Error");
+            });
+        }
+
+        // Initial render and handle resize
+        window.onload = function() {
+            fetchDataAndRender();
+            window.addEventListener('resize', () => {
+                // Re-render on resize
+                fetchDataAndRender(); 
+            });
+            // Also refresh every 2 minutes (120000 ms) to match the Python script's update frequency
+            setInterval(fetchDataAndRender, 120000); 
+        }
+    </script>
+</body>
+</html>
