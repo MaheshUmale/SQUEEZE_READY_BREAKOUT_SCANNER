@@ -13,15 +13,6 @@
             grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
             gap: 4px;
         }
-        .timeframe-group {
-            margin-bottom: 1.5rem;
-        }
-        .timeframe-title {
-            font-size: 1rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-            color: #9ca3af;
-        }
         .cell {
             position: relative;
             display: flex;
@@ -114,37 +105,39 @@
             }
 
             const tfOrder = ['Monthly', 'Weekly', '4H', '2H', '1H', '30m', '15m', '5m', '1m', 'Daily', 'Unknown'];
-            const groupedData = d3.group(data, d => d.highest_tf);
-            const sortedGroups = Array.from(groupedData.entries()).sort((a, b) => tfOrder.indexOf(a[0]) - tfOrder.indexOf(b[0]));
 
-            sortedGroups.forEach(([tf, stocks]) => {
-                const group = heatmapContainer.append('div').attr('class', 'timeframe-group');
-                group.append('h2').attr('class', 'timeframe-title').text(tf);
-                const grid = group.append('div').attr('class', 'grid-container');
+            // Create a single sorted array based on the 2D criteria
+            const sortedData = data.sort((a, b) => {
+                const tfIndexA = tfOrder.indexOf(a.highest_tf);
+                const tfIndexB = tfOrder.indexOf(b.highest_tf);
 
-                // Sort stocks by SqueezeCount (descending)
-                stocks.sort((a, b) => b.count - a.count);
-
-                const cells = grid.selectAll('.cell').data(stocks, d => d.name);
-                cells.exit().remove();
-
-                const enterCells = cells.enter().append("div").attr("class", "cell")
-                    .on("click", (event, d) => window.open(d.url, "_blank"))
-                    .on("mouseover", function(event, d) {
-                        tooltip.transition().duration(200).style("opacity", .9);
-                        tooltip.html(getTooltipHtml(d)).style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 28) + "px");
-                    })
-                    .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
-
-                enterCells.append("div").attr("class", "squeeze-badge").text(d => d.count);
-                enterCells.append("img").attr("class", "stock-logo");
-                enterCells.append("div").attr("class", "stock-ticker");
-
-                const updateCells = enterCells.merge(cells);
-                updateCells.style("background-color", d => getCellColor(d));
-                updateCells.select(".stock-logo").attr("src", d => d.logo).style("display", d => d.logo ? 'block' : 'none');
-                updateCells.select(".stock-ticker").text(d => d.name.replace('NSE:', ''));
+                if (tfIndexA !== tfIndexB) {
+                    return tfIndexA - tfIndexB; // Y-axis sort
+                }
+                return b.count - a.count; // X-axis sort
             });
+
+            heatmapContainer.classed('grid-container', true); // Make the main container the grid
+
+            const cells = heatmapContainer.selectAll('.cell').data(sortedData, d => d.name);
+            cells.exit().remove();
+
+            const enterCells = cells.enter().append("div").attr("class", "cell")
+                .on("click", (event, d) => window.open(d.url, "_blank"))
+                .on("mouseover", function(event, d) {
+                    tooltip.transition().duration(200).style("opacity", .9);
+                    tooltip.html(getTooltipHtml(d)).style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
+
+            enterCells.append("div").attr("class", "squeeze-badge").text(d => d.count);
+            enterCells.append("img").attr("class", "stock-logo");
+            enterCells.append("div").attr("class", "stock-ticker");
+
+            const updateCells = enterCells.merge(cells);
+            updateCells.style("background-color", d => getCellColor(d));
+            updateCells.select(".stock-logo").attr("src", d => d.logo).style("display", d => d.logo ? 'block' : 'none');
+            updateCells.select(".stock-ticker").text(d => d.name.replace('NSE:', ''));
         }
 
         async function loadData() {
