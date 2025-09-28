@@ -1,263 +1,305 @@
+import os
+import urllib.parse
+import json # New import for JSON handling
 from time import sleep
 from datetime import datetime
-from tradingview_screener import Query, col, And,Or
-# Set display options to prevent column wrapping
-import pandas as pd
-pd.set_option('display.expand_frame_repr', False)
-pd.set_option('display.max_columns', None)
-pd.set_option('display.width', 0) # Adjust as needed, 0 will use the full available width
-
-from colorama import Fore, Back, Style
-import urllib.parse
-
-
-
-from collections import defaultdict
-import csv
-
-
 import pandas as pd
 import numpy as np
+from tradingview_screener import Query, col, And, Or
 
+import numpy as np
 
-master_combined =  pd.DataFrame()
+# ... (rest of your imports and functions)
 
-import pandas as pd
-import os
-import json
+# --- Configuration for DataFrame Display ---
+# Set display options for better console output visibility
+pd.set_option('display.expand_frame_repr', False)
+pd.set_option('display.max_columns', None)
+pd.set_option('display.width', 200) 
+
+# --- Global Timeframes ---
+# Timeframe list: ['' (Base), '1', '5', '15', '30', '60', '120', '240', '1W', '1M']
+TIME_FRAMES = [''] + ['1', '5', '15', '30', '60', '120', '240', '1W', '1M']
+
+# --- Helper Functions for TradingView Field Naming ---
+
+def get_select_field_name(indicator_name, tf):
+    """
+    Returns the field name for data selection (uses pipe '|').
+    Example: ('BB.upper', '1') -> 'BB.upper|1'
+    Example: ('BB.upper', '') -> 'BB.upper'
+    """
+    # This format is correct for the .select() function and DataFrame retrieval
+    return f'{indicator_name}|{tf}' if tf else indicator_name
+
+# --- File Handling Functions ---
 
 def append_df_to_csv(df, csv_path):
+    """
+    Appends a DataFrame to a CSV file. Creates the file with a header if it doesn't 
+    exist, otherwise appends without the header.
+    """
     if not os.path.exists(csv_path):
         df.to_csv(csv_path, mode='a', header=True, index=False)
     else:
         df.to_csv(csv_path, mode='a', header=False, index=False)
 
-def generate_heatmap_json(df, output_path='treemap_data.json'):
+# --- Momentum Logic Function ---
+
+def get_momentum_indicator(macd_hist_value):
     """
-    Generates a hierarchical JSON file from the DataFrame for the D3 heatmap.
+    Determines momentum indicator (color proxy) based on MACD Histogram value.
     """
-    # Ensure required columns exist
-    required_cols = ['ticker', 'HeatmapScore', 'TotalSqueezeFiredCount', 'Momentum', 'rvol', 'URL', 'logo']
-    if not all(col in df.columns for col in required_cols):
-        print("⚠️ Cannot generate JSON. DataFrame is missing one or more required columns.")
-        return
+    STRENGTH_THRESHOLD = 0.05
+    
+    if macd_hist_value > STRENGTH_THRESHOLD:
+        return 'G↑' # Dark Green (Strong Up)
+    elif macd_hist_value > 0:
+        return 'Lg' # Light Green (Weak Up)
+    elif macd_hist_value < -STRENGTH_THRESHOLD:
+        return 'R↓' # Dark Red (Strong Down)
+    elif macd_hist_value < 0:
+        return 'Lr' # Light Red (Weak Down)
+    else:
+        return 'N' # Neutral
 
-    # Create the hierarchical structure
-    heatmap_data = {"name": "Squeeze Stocks", "children": []}
+# --- Treemap Data Generation Function (NEW) ---
 
-    # Group by momentum
-    grouped = df.groupby('Momentum')
 
-    momentum_map = {
-        'Bullish': 'Bullish Momentum',
-        'Bearish': 'Bearish Momentum',
-        'Neutral': 'Neutral / Cross'
+def generate_treemap_json(report_df):
+    """
+    Converts the report DataFrame into a hierarchical JSON structure for the Treemap.
+    Grouping is by the Base TF Momentum (Bullish/Bearish/Neutral).
+    
+    CRITICAL CHANGE: Size is now determined by a combined heatmap score (RVOL * SqueezeCount).
+    Color remains based on Momentum, shaded by RVOL.
+    
+    NOTE: This assumes 'volume|5', 'average_volume_10d_calc|5', and 
+    'Momentum|{TIME_FRAMES[0]}' columns are present in report_df.
+    """
+    
+    # --- 1. Calculate RVOL (Relative Volume) for 5 minutes ---
+    volume_col = 'volume|5'
+    avg_vol_col = 'average_volume_10d_calc|5'
+    
+    # Calculate RVOL: Safely divide volume by average volume, defaulting to 0 where avg is 0 or NaN
+    report_df['RVOL|5'] = np.divide(
+        report_df[volume_col],
+        report_df[avg_vol_col],
+        out=np.zeros_like(report_df[volume_col], dtype=float),
+        where=(report_df[avg_vol_col].astype(float) != 0) & (report_df[avg_vol_col].notna())
+    ).round(2)
+    
+    # --- NEW: Combined Heatmap Score (RVOL * SqueezeCount) for box size ---
+    # This score is used for the 'value' property in the JSON, which D3 uses for size.
+    # We add 1 to RVOL to ensure that a low RVOL doesn't zero out the size if a squeeze exists.
+    report_df['HeatmapScore'] = (report_df['RVOL|5'] + 1) * report_df['TotalSqueezeCount']
+    
+    # --- 2. Define Groups and Momentum ---
+    def get_momentum_group(momentum_indicator):
+        if momentum_indicator in ['G↑', 'Lg']:
+            return 'Bullish Momentum'
+        elif momentum_indicator in ['R↓', 'Lr']:
+            return 'Bearish Momentum'
+        else:
+            return 'Neutral / Cross'
+    
+    base_momentum_col = f'Momentum|{TIME_FRAMES[0] or "Base"}'
+    # Ensure the column exists before applying the function
+    if base_momentum_col not in report_df.columns:
+        print(f"Error: Momentum column '{base_momentum_col}' not found.")
+        return {"name": "Squeeze Stocks", "children": []}
+        
+    report_df['Group'] = report_df[base_momentum_col].apply(get_momentum_group)
+    
+    # --- 3. Build Hierarchical JSON Data ---
+    treemap_data = {
+        "name": "Squeeze Stocks",
+        "children": []
     }
 
-    for group_name, group_df in grouped:
-        if group_name not in momentum_map:
-            continue
-
-        group_dict = {
-            "name": momentum_map[group_name],
+    # Initialize primary groups
+    groups = report_df['Group'].unique()
+    for group in groups:
+        treemap_data["children"].append({
+            "name": group,
             "children": []
+        })
+
+    # Add individual stocks as children
+    for index, row in report_df.iterrows():
+        
+        group_name = row['Group']
+        
+        # Calculate overall Squeeze Intensity by averaging active squeezes
+        intensity_cols = [f'SqzIntensity|{tf}' for tf in TIME_FRAMES]
+        active_intensities = [row[col] for col in intensity_cols if col in row and row[col] > 0]
+        avg_intensity = np.mean(active_intensities) if active_intensities else 0.0
+        
+        # --- 4. Construct TradingView URL ---
+        # The ticker needs to be URL-encoded, as done in the previous version of your script.
+        encoded_ticker = urllib.parse.quote(row['ticker'])
+        tv_url = f"https://in.tradingview.com/chart/N8zfIJVK/?symbol={encoded_ticker}"
+
+        stock_data = {
+            "name": row['ticker'], # Use ticker for the name
+            "value": float(row['HeatmapScore']), # NEW: Size based on HeatmapScore (RVOL * SqueezeCount)
+            "count": int(row['TotalSqueezeCount']),
+            "momentum": row[base_momentum_col], 
+            "intensity": avg_intensity,
+            "rvol": float(row['RVOL|5']), # RVOL for color shading
+            "url": tv_url # URL for the onclick event
         }
+        
+        # Find the correct parent group and append
+        for group_node in treemap_data["children"]:
+            if group_node["name"] == group_name:
+                group_node["children"].append(stock_data)
+                break
+                
+    # Save the JSON data
+    try:
+        with open('treemap_data.json', 'w') as f:
+            json.dump(treemap_data, f, indent=4)
+        print("✅ Treemap data saved to treemap_data.json")
+    except IOError as e:
+        print(f"❌ Error saving treemap_data.json: {e}")
+        
+    return treemap_data
 
-        for _, row in group_df.iterrows():
-            group_dict["children"].append({
-                "name": row['ticker'],
-                "value": row['HeatmapScore'],
-                "count": row['TotalSqueezeFiredCount'],
-                "momentum": row['Momentum'], # This might be redundant but good for debugging
-                "rvol": row['rvol'],
-                "url": row['URL'],
-                "logo": row['logo']
-            })
+# ... (rest of your script)
 
-        heatmap_data["children"].append(group_dict)
+# --- Squeeze Logic Function (Kept intact) ---
 
-    # Write the JSON file
-    with open(output_path, 'w') as f:
-        json.dump(heatmap_data, f, indent=4)
-    print(f"✅ Heatmap JSON successfully generated at '{output_path}'.")
-
-
-def identify_squeeze_fired_across_timeframes(df):
+def identify_squeeze_across_timeframes(df):
     """
-    Identifies when a "squeeze has fired" across all available timeframes and determines
-    the breakout momentum.
-
-    A squeeze has FIRED if:
-    - The PREVIOUS candle was in a squeeze.
-    - The CURRENT candle is NOT in a squeeze.
-
-    Momentum is determined by the price relative to the Bollinger Bands on the timeframe
-    where the squeeze fired.
-
-    Args:
-        df (pd.DataFrame): DataFrame with current and previous indicator values.
-
-    Returns:
-        pd.DataFrame: The DataFrame with analysis columns including 'Momentum'.
+    Identifies the "squeeze" condition (BB inside KC), calculates Squeeze Intensity,
+    determines Momentum Indicator, and counts total active squeezes.
     """
-    timeframes = [''] + ['1', '5', '15', '30', '60', '120', '240', '1W', '1M']
 
-    if not all(c in df.columns for c in ['KltChnl.upper', 'BB.upper', 'KltChnl.upper[1]', 'BB.upper[1]', 'close']):
-        print("Warning: Missing core columns for squeeze and momentum logic.")
+    if df.empty:
         return df
 
-    print(f"--- Identifying Squeeze Fired and Momentum for {len(timeframes)} Timeframes ---")
+    if not all(col in df.columns for col in [get_select_field_name('KltChnl.upper', ''), get_select_field_name('BB.upper', '')]):
+        print("Warning: Missing core columns. Cannot run squeeze logic.")
+        return df
 
-    squeeze_fired_cols = []
-    bullish_breakout_cols = []
-    bearish_breakout_cols = []
+    print(f"--- Processing {len(TIME_FRAMES)} Timeframes ---")
 
-    for tf in timeframes:
-        suffix = f"|{tf}" if tf else ""
+    squeeze_cols = [] 
+    
+    for tf in TIME_FRAMES:
+        tf_name = tf or 'Base'
+        
+        kc_upper_col = get_select_field_name('KltChnl.upper', tf)
+        kc_lower_col = get_select_field_name('KltChnl.lower', tf)
+        bb_upper_col = get_select_field_name('BB.upper', tf)
+        bb_lower_col = get_select_field_name('BB.lower', tf)
+        macd_hist_col = get_select_field_name('MACD.hist', tf)
+        
+        squeeze_bool_col = f'Squeeze|{tf_name}'
+        intensity_col = f'SqzIntensity|{tf_name}'
+        momentum_ind_col = f'Momentum|{tf_name}'
+        
+        required_cols = [kc_upper_col, kc_lower_col, bb_upper_col, bb_lower_col, macd_hist_col]
+        if all(col in df.columns for col in required_cols):
+            
+            # --- 1. Identify Squeeze Condition (Boolean) ---
+            df[squeeze_bool_col] = (
+                (df[bb_upper_col] < df[kc_upper_col]) & 
+                (df[bb_lower_col] > df[kc_lower_col])
+            )
+            squeeze_cols.append(squeeze_bool_col) 
+            
+            # --- 2. Calculate Squeeze Intensity (Float) ---
+            bb_basis = (df[bb_upper_col] + df[bb_lower_col]) / 2
+            klt_band_width = bb_basis - df[kc_lower_col]
+            bb_band_width = bb_basis - df[bb_lower_col]
 
-        # Define columns for CURRENT and PREVIOUS candles
-        kc_upper_curr, kc_lower_curr = f'KltChnl.upper{suffix}', f'KltChnl.lower{suffix}'
-        bb_upper_curr, bb_lower_curr = f'BB.upper{suffix}', f'BB.lower{suffix}'
-        kc_upper_prev, kc_lower_prev = f'KltChnl.upper{suffix}[1]', f'KltChnl.lower{suffix}[1]'
-        bb_upper_prev, bb_lower_prev = f'BB.upper{suffix}[1]', f'BB.lower{suffix}[1]'
+            df[intensity_col] = np.divide(
+                klt_band_width,
+                bb_band_width,
+                out=np.zeros_like(klt_band_width, dtype=float),
+                where=(bb_band_width != 0) & df[squeeze_bool_col]
+            ).round(3) 
+            
+            # --- 3. Calculate Momentum Indicator ---
+            df[momentum_ind_col] = df[macd_hist_col].apply(get_momentum_indicator)
 
-        # Column names for new signals
-        squeeze_fired_col = f'SqueezeFired{suffix}'
-        bullish_col = f'Bullish_Breakout{suffix}'
-        bearish_col = f'Bearish_Breakout{suffix}'
-
-        required = [
-            kc_upper_curr, kc_lower_curr, bb_upper_curr, bb_lower_curr,
-            kc_upper_prev, kc_lower_prev, bb_upper_prev, bb_lower_prev
-        ]
-
-        if all(c in df.columns for c in required):
-            # Squeeze state for PREVIOUS candle
-            squeeze_prev = (df[kc_upper_prev] < df[bb_upper_prev]) & (df[kc_lower_prev] > df[bb_lower_prev])
-            # Squeeze state for CURRENT candle
-            squeeze_curr = (df[kc_upper_curr] < df[bb_upper_curr]) & (df[kc_lower_curr] > df[bb_lower_curr])
-
-            # Identify if the squeeze has FIRED
-            df[squeeze_fired_col] = (squeeze_prev == True) & (squeeze_curr == False)
-            squeeze_fired_cols.append(squeeze_fired_col)
-
-            # Determine breakout direction for this timeframe
-            df[bullish_col] = df[squeeze_fired_col] & (df['close'] > df[bb_upper_curr])
-            df[bearish_col] = df[squeeze_fired_col] & (df['close'] < df[bb_lower_curr])
-            bullish_breakout_cols.append(bullish_col)
-            bearish_breakout_cols.append(bearish_col)
-
-            print(f"✅ Processed Squeeze Fired and Momentum for TF '{tf}'.")
+            print(f"✅ Squeeze, Intensity, and Momentum columns added for TF '{tf_name}'")
+            
         else:
-            print(f"⚠️ Skipping TF '{tf}': Missing one or more required columns.")
-
-    # Calculate total fired squeezes
-    if squeeze_fired_cols:
-        df['TotalSqueezeFiredCount'] = df[squeeze_fired_cols].sum(axis=1)
-        print("✅ TotalSqueezeFiredCount column added.")
-
-    # Determine overall momentum
-    if bullish_breakout_cols and bearish_breakout_cols:
-        is_any_bullish = df[bullish_breakout_cols].any(axis=1)
-        is_any_bearish = df[bearish_breakout_cols].any(axis=1)
-
-        conditions = [is_any_bullish, is_any_bearish]
-        choices = ['Bullish', 'Bearish']
-        df['Momentum'] = np.select(conditions, choices, default='Neutral')
-        print("✅ Momentum column added.")
+            print(f"⚠️ Skipping TF '{tf_name}': One or more required columns are missing.")
+            
+    # --- 4. Calculate Total Squeeze Count ---
+    if squeeze_cols:
+        df['TotalSqueezeCount'] = df[squeeze_cols].sum(axis=1)
+        print("✅ TotalSqueezeCount column added.")
 
     print("--- Processing Complete ---")
     return df
 
+# --- Main Application Loop ---
 
-HIGH_VALUE = 50000000.00
-VOLUME_MULTIPLIER =  5.0
-writeHeader=True
-while True :
+while True : 
+    
+    # Define the base query to select necessary columns across all timeframes
     query = Query().select(
-
-        'name','logoid',                    # Stock name
-
-        'close',                   # Current price
-        'volume|5',                # 1-minute volume
-        'Value.Traded|5',          # 1-minute traded value
-        'average_volume_10d_calc', # Average volume (10 days)
-        'average_volume_10d_calc|5', # Average 1-minute volume (10 days)
-        # Keltner Channel (Current and Previous)
-        'KltChnl.lower', 'KltChnl.lower[1]',
-        'KltChnl.lower|1', 'KltChnl.lower|1[1]',
-        'KltChnl.lower|5', 'KltChnl.lower|5[1]',
-        'KltChnl.lower|15', 'KltChnl.lower|15[1]',
-        'KltChnl.lower|30', 'KltChnl.lower|30[1]',
-        'KltChnl.lower|60', 'KltChnl.lower|60[1]',
-        'KltChnl.lower|120', 'KltChnl.lower|120[1]',
-        'KltChnl.lower|240', 'KltChnl.lower|240[1]',
-        'KltChnl.lower|1W', 'KltChnl.lower|1W[1]',
-        'KltChnl.lower|1M', 'KltChnl.lower|1M[1]',
-        'KltChnl.upper', 'KltChnl.upper[1]',
-        'KltChnl.upper|1', 'KltChnl.upper|1[1]',
-        'KltChnl.upper|5', 'KltChnl.upper|5[1]',
-        'KltChnl.upper|15', 'KltChnl.upper|15[1]',
-        'KltChnl.upper|30', 'KltChnl.upper|30[1]',
-        'KltChnl.upper|60', 'KltChnl.upper|60[1]',
-        'KltChnl.upper|120', 'KltChnl.upper|120[1]',
-        'KltChnl.upper|240', 'KltChnl.upper|240[1]',
-        'KltChnl.upper|1W', 'KltChnl.upper|1W[1]',
-        'KltChnl.upper|1M', 'KltChnl.upper|1M[1]',
-        # Bollinger Bands (Current and Previous)
-        'BB.lower', 'BB.lower[1]',
-        'BB.lower|1', 'BB.lower|1[1]',
-        'BB.lower|5', 'BB.lower|5[1]',
-        'BB.lower|15', 'BB.lower|15[1]',
-        'BB.lower|30', 'BB.lower|30[1]',
-        'BB.lower|60', 'BB.lower|60[1]',
-        'BB.lower|120', 'BB.lower|120[1]',
-        'BB.lower|240', 'BB.lower|240[1]',
-        'BB.lower|1W', 'BB.lower|1W[1]',
-        'BB.lower|1M', 'BB.lower|1M[1]',
-        'BB.upper', 'BB.upper[1]',
-        'BB.upper|1', 'BB.upper|1[1]',
-        'BB.upper|5', 'BB.upper|5[1]',
-        'BB.upper|15', 'BB.upper|15[1]',
-        'BB.upper|30', 'BB.upper|30[1]',
-        'BB.upper|60', 'BB.upper|60[1]',
-        'BB.upper|120', 'BB.upper|120[1]',
-        'BB.upper|240', 'BB.upper|240[1]',
-        'BB.upper|1W', 'BB.upper|1W[1]',
-        'BB.upper|1M', 'BB.upper|1M[1]'
+        'name',                    
+        'close',                   
+        'volume|5',                
+        'Value.Traded|5',          # CRITICAL: Used for treemap size
+        'average_volume_10d_calc', 
+        'average_volume_10d_calc|5', 
+        
+        # Keltner Lower & Upper
+        *[get_select_field_name(f'KltChnl.{band}', tf) 
+          for tf in TIME_FRAMES 
+          for band in ['lower', 'upper']],
+          
+        # Bollinger Band Lower & Upper
+        *[get_select_field_name(f'BB.{band}', tf) 
+          for tf in TIME_FRAMES 
+          for band in ['lower', 'upper']],
+          
+        # MACD Histogram
+        *[get_select_field_name('MACD.hist', tf) 
+          for tf in TIME_FRAMES]
+          
     ).where2(
         And(
+            # Primary Filters (Liquidity and Stock Type)
             col('is_primary') == True,
             col('typespecs').has('common'),
             col('type') == 'stock',
             col('exchange') == 'NSE',
             col('close').between(20, 10000),
-            col('active_symbol') == True,
-            col('average_volume_10d_calc|5') > 50000,
+            col('active_symbol') == True, 
+            col('average_volume_10d_calc|5') > 50000, 
             col('Value.Traded|5') > 10000000,
-
-        # Filter for stocks that were in a squeeze on the PREVIOUS candle on any timeframe
-        Or(
-            And(col('BB.upper[1]') < col('KltChnl.upper[1]'),
-                col('BB.lower[1]') > col('KltChnl.lower[1]')),
-            And(col('BB.upper|1[1]') < col('KltChnl.upper|1[1]'),
-                col('BB.lower|1[1]') > col('KltChnl.lower|1[1]')),
-            And(col('BB.upper|5[1]') < col('KltChnl.upper|5[1]'),
-                col('BB.lower|5[1]') > col('KltChnl.lower|5[1]')),
-            And(col('BB.upper|15[1]') < col('KltChnl.upper|15[1]'),
-                col('BB.lower|15[1]') > col('KltChnl.lower|15[1]')),
-            And(col('BB.upper|30[1]') < col('KltChnl.upper|30[1]'),
-                col('BB.lower|30[1]') > col('KltChnl.lower|30[1]')),
-            And(col('BB.upper|60[1]') < col('KltChnl.upper|60[1]'),
-                col('BB.lower|60[1]') > col('KltChnl.lower|60[1]')),
-            And(col('BB.upper|120[1]') < col('KltChnl.upper|120[1]'),
-                col('BB.lower|120[1]') > col('KltChnl.lower|120[1]')),
-            And(col('BB.upper|240[1]') < col('KltChnl.upper|240[1]'),
-                col('BB.lower|240[1]') > col('KltChnl.lower|240[1]')),
-            And(col('BB.upper|1W[1]') < col('KltChnl.upper|1W[1]'),
-                col('BB.lower|1W[1]') > col('KltChnl.lower|1W[1]')),
-            And(col('BB.upper|1M[1]') < col('KltChnl.upper|1M[1]'),
-                col('BB.lower|1M[1]') > col('KltChnl.lower|1M[1]')),
+        
+            # Squeeze Filter (Using PIPED field names as instructed)
+            Or(
+                # Base TF ('')
+                And(col('BB.upper') < col('KltChnl.upper'), col('BB.lower') > col('KltChnl.lower')),
+                # TF '1'
+                And(col('BB.upper|1') < col('KltChnl.upper|1'), col('BB.lower|1') > col('KltChnl.lower|1')),
+                # TF '5'
+                And(col('BB.upper|5') < col('KltChnl.upper|5'), col('BB.lower|5') > col('KltChnl.lower|5')),
+                # TF '15'
+                And(col('BB.upper|15') < col('KltChnl.upper|15'), col('BB.lower|15') > col('KltChnl.lower|15')),
+                # TF '30'
+                And(col('BB.upper|30') < col('KltChnl.upper|30'), col('BB.lower|30') > col('KltChnl.lower|30')),
+                # TF '60'
+                And(col('BB.upper|60') < col('KltChnl.upper|60'), col('BB.lower|60') > col('KltChnl.lower|60')),
+                # TF '120'
+                And(col('BB.upper|120') < col('KltChnl.upper|120'), col('BB.lower|120') > col('KltChnl.lower|120')),
+                # TF '240'
+                And(col('BB.upper|240') < col('KltChnl.upper|240'), col('BB.lower|240') > col('KltChnl.lower|240')),
+                # TF '1W'
+                And(col('BB.upper|1W') < col('KltChnl.upper|1W'), col('BB.lower|1W') > col('KltChnl.lower|1W')),
+                # TF '1M'
+                And(col('BB.upper|1M') < col('KltChnl.upper|1M'), col('BB.lower|1M') > col('KltChnl.lower|1M')),
             )
         )
 
@@ -268,60 +310,42 @@ while True :
     ).set_property(
         'symbols', {'query': {'types': ['stock', 'fund', 'dr']}}
     )
+
     # Execute the query
     _, dfNew = query.get_scanner_data()
-
-    if not dfNew.empty :
+   
+    if not dfNew.empty:
         current_time = datetime.now().strftime('%H:%M:%S')
         current_DATE = datetime.now().strftime('%d_%m_%y')
 
-        dfNew.insert(3, 'URL',"")
+        # Prepare the DataFrame with metadata
+        dfNew.insert(3, 'URL', "")  
         dfNew['encodedTicker'] = dfNew['ticker'].apply(urllib.parse.quote)
-        dfNew['URL'] = "https://in.tradingview.com/chart/N8zfIJVK/?symbol="+dfNew['encodedTicker']+" "
+        dfNew['URL'] = "https://in.tradingview.com/chart/N8zfIJVK/?symbol=" + dfNew['encodedTicker'] + " "
         dfNew.insert(0, 'current_timestamp', current_time)
+         
+        # Apply the squeeze and intensity/momentum logic
+        filtered_df = identify_squeeze_across_timeframes(dfNew)
+        
+        if not filtered_df.empty: 
+            # Filter the final output to only show symbols with at least one active squeeze
+            report_df = filtered_df[filtered_df['TotalSqueezeCount'] > 0].copy()
 
-        # Construct logo URL from logoid
-        if 'logoid' in dfNew.columns:
-            dfNew['logo'] = dfNew['logoid'].apply(lambda x: f"https://s3-symbol-logo.tradingview.com/{x}.svg" if pd.notna(x) and x.strip() else '')
-        else:
-            dfNew['logo'] = ''
+            if not report_df.empty:
+                
+                # --- Generate Treemap Data (JSON) ---
+                generate_treemap_json(report_df)
 
-        # Identify which stocks have a fired squeeze
-        processed_df = identify_squeeze_fired_across_timeframes(dfNew)
-
-        # Calculate RVOL and Heatmap Score for visualization
-        if 'average_volume_10d_calc|5' in processed_df.columns and 'volume|5' in processed_df.columns:
-            # Replace 0s or NaNs in the denominator to avoid division by zero errors
-            avg_vol = processed_df['average_volume_10d_calc|5'].replace(0, np.nan)
-            processed_df['rvol'] = processed_df['volume|5'] / avg_vol
-            processed_df['rvol'] = processed_df['rvol'].fillna(0)  # Fill any NaNs that result from division
-
-            # Calculate Heatmap Score, ensuring TotalSqueezeFiredCount exists
-            if 'TotalSqueezeFiredCount' in processed_df.columns:
-                processed_df['HeatmapScore'] = (processed_df['rvol'] + 1) * processed_df['TotalSqueezeFiredCount']
-                print("✅ RVOL and HeatmapScore columns added.")
+                print("==" * 65)
+                print(f"Squeeze & Momentum Report ({current_time}) - See SqueezeTreemap.html for visual Treemap.")
+                print("==" * 65)
+                
+                # --- Append to CSV ---
+                csv_cols = ['current_timestamp', 'name', 'close', 'TotalSqueezeCount']
+                append_df_to_csv(report_df[csv_cols], 'BBSCAN_' + str(current_DATE) + '.csv')
+                
             else:
-                processed_df['HeatmapScore'] = 0
-                print("⚠️ TotalSqueezeFiredCount column not found. HeatmapScore set to 0.")
-
-        else:
-            print("⚠️ Could not calculate RVOL or HeatmapScore: Volume columns are missing.")
-            processed_df['rvol'] = 0
-            processed_df['HeatmapScore'] = 0
-
-        # Filter for stocks that have at least one fired squeeze
-        filtered_df = processed_df[processed_df['TotalSqueezeFiredCount'] > 0]
-
-        if not filtered_df.empty :
-            # Generate the JSON for the heatmap visualization
-            generate_heatmap_json(filtered_df)
-
-            # (Optional) Save the detailed CSV report as well
-            append_df_to_csv(filtered_df, 'BBSCAN_FIRED_'+str(current_DATE)+'.csv')
-
-            print(f"=="*30)
-            writeHeader=False
-            print("--- Filtered Results ---")
-            print(filtered_df[['ticker', 'Momentum', 'TotalSqueezeFiredCount', 'rvol', 'HeatmapScore']])
-
+                print(f"No active squeezes found at {current_time}.")
+        
+    # Sleep for 120 seconds (2 minutes) before the next scan
     sleep(120)
