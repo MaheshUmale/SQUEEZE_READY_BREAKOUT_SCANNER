@@ -175,7 +175,9 @@ VOLUME_MULTIPLIER =  5.0
 writeHeader=True
 while True :
     query = Query().select(
+
         'name','logoid',                    # Stock name
+
         'close',                   # Current price
         'volume|5',                # 1-minute volume
         'Value.Traded|5',          # 1-minute traded value
