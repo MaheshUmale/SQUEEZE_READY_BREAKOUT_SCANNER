@@ -64,13 +64,12 @@
         const tooltip = d3.select(".tooltip");
 
         function getMomentumGroup(stock) {
-            // This is a bit of a hack. Since the flat data doesn't retain the parent group name,
-            // we have to rely on the `momentum` property which seems to contain 'G' for green, 'R' for red.
-            // A better data structure would be ideal, but we work with what we have.
-            const momentum = stock.data.momentum.charAt(0);
-            if (momentum === 'G') return "Bullish";
-            if (momentum === 'R' || momentum === 'L') return "Bearish";
-            return "Neutral";
+            // Get the group name from the parent node in the D3 hierarchy. This is more reliable
+            // than inspecting a property on the leaf node itself.
+            const parentName = stock.parent.data.name;
+            if (parentName === 'Bullish Momentum') return 'Bullish';
+            if (parentName === 'Bearish Momentum') return 'Bearish';
+            return 'Neutral';
         }
 
         async function loadData() {
