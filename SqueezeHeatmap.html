@@ -3,156 +3,102 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Squeeze Heatmap</title>
+    <title>Stock Logo Wall</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
-        body { font-family: sans-serif; }
+        body {
+            font-family: sans-serif;
+            background-color: #f0f2f5;
+        }
         .chart-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-            gap: 4px;
-            padding: 10px;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 16px;
+            padding: 20px;
         }
         .cell {
             display: flex;
             flex-direction: column;
-            justify-content: space-between; /* Adjusted for logo and text */
+            justify-content: center;
             align-items: center;
-            color: white;
-            padding: 8px;
-            border-radius: 4px;
+            background-color: #ffffff;
+            padding: 12px;
+            border-radius: 8px;
             cursor: pointer;
             text-align: center;
-            height: 100px; /* Increased height for logo */
-            transition: transform 0.2s;
-        }
-        .stock-logo {
-            width: 32px; /* Set a fixed width */
-            height: 32px; /* Set a fixed height */
-            margin-bottom: 5px; /* Space between logo and ticker */
+            height: 100px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
         .cell:hover {
-            transform: scale(1.05);
+            transform: translateY(-5px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .stock-logo {
+            width: 40px;
+            height: 40px;
+            margin-bottom: 8px;
         }
         .stock-ticker {
-            font-weight: bold;
+            font-weight: 600;
             font-size: 14px;
-        }
-        .stock-rvol {
-            font-size: 12px;
-        }
-        .tooltip {
-            position: absolute;
-            text-align: center;
-            width: auto;
-            height: auto;
-            padding: 8px;
-            font: 12px sans-serif;
-            background: lightsteelblue;
-            border: 0px;
-            border-radius: 8px;
-            pointer-events: none;
-            opacity: 0;
+            color: #333;
         }
     </style>
 </head>
 <body class="bg-gray-100">
     <div class="container mx-auto p-4">
-        <h1 class="text-2xl font-bold text-center mb-4">Stock Squeeze Heatmap</h1>
+        <h1 class="text-3xl font-bold text-center text-gray-800 my-6">Stock Screener</h1>
         <div id="chart" class="chart-container"></div>
-        <div class="tooltip"></div>
     </div>
 
     <script>
         const chartContainer = d3.select("#chart");
-        const tooltip = d3.select(".tooltip");
-
-        function getMomentumGroup(stock) {
-            // Get the group name from the parent node in the D3 hierarchy. This is more reliable
-            // than inspecting a property on the leaf node itself.
-            const parentName = stock.parent.data.name;
-            if (parentName === 'Bullish Momentum') return 'Bullish';
-            if (parentName === 'Bearish Momentum') return 'Bearish';
-            return 'Neutral';
-        }
 
         async function loadData() {
-            // Append a cache-busting query parameter to ensure fresh data
-            const data = await d3.json(`treemap_data.json?t=${new Date().getTime()}`);
+            try {
+                // Append a cache-busting query parameter to ensure fresh data
+                const data = await d3.json(`treemap_data.json?t=${new Date().getTime()}`);
 
-            // The data is hierarchical. We need to flatten it into a list of all stocks (leaves).
-            const root = d3.hierarchy(data).sum(d => d.value);
-            const leaves = root.leaves();
+                // --- D3 Data Binding ---
+                const cells = chartContainer.selectAll(".cell")
+                    .data(data, d => d.name); // Key function for object constancy
 
-            // Sort leaves by group to cluster them visually
-            leaves.sort((a, b) => {
-                const groupA = getMomentumGroup(a);
-                const groupB = getMomentumGroup(b);
-                if (groupA < groupB) return -1;
-                if (groupA > groupB) return 1;
-                return b.data.value - a.data.value; // Secondary sort by heatmap value
-            });
+                // Exit selection: Remove cells that are no longer in the data
+                cells.exit().remove();
 
-            // Define color scales. We'll map RVOL (0 to ~5) to a color intensity.
-            const colorScales = {
-                Bullish: d3.scaleLinear().domain([0, 5]).range(["#1a472a", "#48bb78"]), // Dark to light green
-                Bearish: d3.scaleLinear().domain([0, 5]).range(["#7f1d1d", "#f56565"]), // Dark to light red
-                Neutral: d3.scaleLinear().domain([0, 5]).range(["#4a5568", "#a0aec0"])  // Dark to light gray
-            };
+                // Enter selection: Create new div elements for new stocks
+                const enterCells = cells.enter()
+                    .append("a") // Use an anchor tag to make the whole cell clickable
+                    .attr("href", d => d.url)
+                    .attr("target", "_blank")
+                    .attr("class", "cell");
 
-            // --- D3 Data Binding ---
-            const cells = chartContainer.selectAll(".cell")
-                .data(leaves, d => d.data.name); // Key function for object constancy
+                // Add child elements for the logo and text within each cell
+                enterCells.append("img")
+                    .attr("class", "stock-logo")
+                    .attr("src", d => d.logo)
+                    .style("display", d => d.logo ? 'block' : 'none'); // Hide if no logo
 
-            // Exit selection: Remove cells that are no longer in the data
-            cells.exit().remove();
+                enterCells.append("div")
+                    .attr("class", "stock-ticker");
 
-            // Enter selection: Create new div elements for new stocks
-            const enterCells = cells.enter()
-                .append("div")
-                .attr("class", "cell")
-                .on("click", (event, d) => window.open(d.data.url, "_blank"))
-                .on("mouseover", function(event, d) {
-                    tooltip.transition().duration(200).style("opacity", .9);
-                    tooltip.html(
-                        `<strong>${d.data.name}</strong><br/>` +
-                        `Squeeze Count: ${d.data.count}<br/>` +
-                        `RVOL: ${d.data.rvol.toFixed(2)}<br/>` +
-                        `Heatmap Score: ${d.data.value.toFixed(2)}`
-                    )
-                    .style("left", (event.pageX + 10) + "px")
-                    .style("top", (event.pageY - 28) + "px");
-                })
-                .on("mouseout", function(d) {
-                    tooltip.transition().duration(500).style("opacity", 0);
-                });
+                // Merge enter and update selections to apply updates to all existing cells
+                const updateCells = enterCells.merge(cells);
 
-            // Add child elements for the logo and text within each cell
-            enterCells.append("img")
-                .attr("class", "stock-logo")
-                .attr("src", d => d.data.logo)
-                .style("display", d => d.data.logo ? 'block' : 'none'); // Hide if no logo
-            enterCells.append("div").attr("class", "stock-ticker");
-            enterCells.append("div").attr("class", "stock-rvol");
+                // Update content for all cells
+                updateCells.select(".stock-logo")
+                    .attr("src", d => d.logo)
+                    .style("display", d => d.logo ? 'block' : 'none');
 
-            // Merge enter and update selections to apply updates to all existing cells
-            const updateCells = enterCells.merge(cells);
+                updateCells.select(".stock-ticker")
+                    .text(d => d.name.replace('NSE:', ''));
 
-            // Update styling, logo, and text for all cells (both new and existing)
-            updateCells
-                .style("background-color", d => {
-                    const group = getMomentumGroup(d);
-                    const rvol = Math.min(d.data.rvol, 5);
-                    return colorScales[group](rvol);
-                });
-
-            updateCells.select(".stock-logo")
-                .attr("src", d => d.data.logo)
-                .style("display", d => d.data.logo ? 'block' : 'none');
-
-            updateCells.select(".stock-ticker").text(d => d.data.name.replace('NSE:', ''));
-            updateCells.select(".stock-rvol").text(d => `RVOL: ${d.data.rvol.toFixed(2)}`);
+            } catch (error) {
+                console.error("Failed to load data:", error);
+                chartContainer.html("<p class='text-center text-red-500'>Failed to load data. Please check the console.</p>");
+            }
         }
 
         // Initial data load
