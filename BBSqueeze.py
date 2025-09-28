@@ -64,7 +64,7 @@ def generate_heatmap_json(df, output_path):
             elif c == 'highest_tf' or c == 'squeeze_strength':
                 df[c] = 'N/A'
             else:
-                df[c] = 0 if 'Score' in c or 'Count' in c or 'rvol' in c else ''
+                df[c] = 0
 
     # Create a flat list of stock data
     heatmap_data = []
@@ -241,7 +241,7 @@ while True:
                 col('average_volume_10d_calc|5') > 50000, col('Value.Traded|5') > 10000000,
                 Or(*squeeze_conditions)
             )
-        ).limit(500).set_markets('india')
+        ).set_markets('india')
 
         _, df_in_squeeze = query_in_squeeze.get_scanner_data()
 
@@ -252,8 +252,9 @@ while True:
             # Create a list of all (ticker, timeframe) pairs currently in a squeeze
             for _, row in df_in_squeeze.iterrows():
                 for tf_suffix, tf_name in tf_display_map.items():
-                    if (row[f'BB.upper{tf_suffix}'] < row[f'KltChnl.upper{tf_suffix}']) and \
-                       (row[f'BB.lower{tf_suffix}'] > row[f'KltChnl.lower{tf_suffix}']):
+                    is_in_squeeze = (row[f'BB.upper{tf_suffix}'] < row[f'KltChnl.upper{tf_suffix}']) and \
+                                    (row[f'BB.lower{tf_suffix}'] > row[f'KltChnl.lower{tf_suffix}'])
+                    if is_in_squeeze:
                         current_squeeze_pairs.append((row['ticker'], tf_name))
 
             # --- Process and save "In Squeeze" data ---
@@ -304,6 +305,8 @@ while True:
                 avg_vol = df_fired['average_volume_10d_calc|5'].replace(0, np.nan)
                 df_fired['rvol'] = (df_fired['volume|5'] / avg_vol).fillna(0)
                 df_fired['momentum'] = df_fired['MACD.hist'].apply(get_momentum_indicator)
+                df_fired['squeeze_strength'] = 'N/A' # Not applicable for fired squeezes
+                df_fired['highest_tf'] = 'N/A' # Not applicable for fired squeezes
 
                 momentum_map = {'Bullish': 1, 'Neutral': 0.5, 'Bearish': -1}
                 df_fired['HeatmapScore'] = (df_fired['rvol'] + 1) * df_fired['SqueezeCount'] * df_fired['momentum'].map(momentum_map)
@@ -327,4 +330,3 @@ while True:
 
     print(f"\n--- Waiting for {TIME_INTERVAL_SECONDS} seconds until the next scan ---\n")
     sleep(TIME_INTERVAL_SECONDS)
-
