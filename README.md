@@ -5,17 +5,10 @@ THIS CODE WILL DO THE BACKTESTING OF STOCKS On DAILY,WEEKLY and MONTHLY TIMEFRAM
 The following algorithm details the process for forecasting significant market breakouts by combining volatility compression (representing built-up energy) and volume (representing the necessary fuel), based on the analysis of historical powerful patterns  
 
 # IT WILL USE 
-from tvDatafeed import TvDatafeed,Interval
-#USE fetch  data from tvDatafeed ( tradingview )
-
-tv = TvDatafeed() //for getting daily weekly monthly data from Tradingview.
-
-
-It will do backtest for last 3 years of data.
-It will store data fetched and result in local SQLITE TABLE
-
-# Calculate TTM Squeeze using pandas_ta
-squeeze_data = ta.squeeze(data['High'], data['Low'], data['Close'], append=True)
+ 
+from tradingview_screener import Query, col, And, Or
+for SCANNING (as shown in BBSqueeze.py file)
+ 
 
 USe below ALGORIThM Steps to find potential candidate and trigger price 
 Check volume levels on breakout of trigger price
