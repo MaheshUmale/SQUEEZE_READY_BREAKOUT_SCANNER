@@ -154,7 +154,11 @@
 
         function getTooltipHtml(d, type) {
             const momentumHtml = `Momentum: <span style="color: ${getCellColor(d)};">${d.momentum}</span><br/>`;
-            const squeezeHtml = type === 'in_squeeze' ? `Squeeze on ${d.count} TFs (${d.highest_tf})<br/>` : '';
+            let squeezeHtml = '';
+            if (type === 'in_squeeze') {
+                const strengthHtml = d.squeeze_strength !== 'N/A' ? ` (${d.squeeze_strength})` : '';
+                squeezeHtml = `Squeeze on ${d.count} TFs (${d.highest_tf})${strengthHtml}<br/>`;
+            }
             return `<strong>${d.name.replace('NSE:', '')}</strong><br/>` + squeezeHtml + momentumHtml + `RVOL: ${d.rvol.toFixed(2)}`;
         }
 
