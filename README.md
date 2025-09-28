@@ -17,7 +17,6 @@ This project provides a real-time scanner that identifies stocks where a TTM Squ
 
 ## Setup and Usage
 
-
 ### 1. Install Dependencies
 
 First, ensure you have Python 3 installed. Then, install the required packages using pip:
@@ -38,9 +37,19 @@ The script will run continuously and update the JSON file every two minutes.
 
 ### 3. View the Heatmap
 
-Open the `SqueezeHeatmap.html` file in your web browser (e.g., Chrome, Firefox).
+To avoid browser security errors (CORS), you need to serve the files from a local web server. Python has a simple one built-in.
 
-The heatmap will load automatically and will refresh every two minutes to show the latest scanner results.
+In your terminal, from the project directory, run:
+
+```bash
+python3 -m http.server
+```
+
+This will start a server, usually on port 8000. Now, open your web browser and navigate to:
+
+**http://localhost:8000/SqueezeHeatmap.html**
+
+The heatmap will load and will automatically refresh every two minutes to show the latest scanner results.
 
 -   **Green cells**: Stocks with bullish momentum.
 -   **Red cells**: Stocks with bearish momentum.
