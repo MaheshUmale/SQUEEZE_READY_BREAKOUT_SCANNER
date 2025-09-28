@@ -71,7 +71,12 @@
 </head>
 <body class="bg-gray-900">
     <div class="container mx-auto p-4">
-        <h1 class="text-3xl font-bold text-center mb-6">Stocks Currently in a Squeeze</h1>
+        <h1 class="text-3xl font-bold text-center mb-2">Real-Time Stock Squeeze Scanner</h1>
+        <div id="toggle-controls" class="flex justify-center my-4 space-x-2">
+            <button id="btn-fired" class="px-4 py-2 rounded-md text-sm font-medium transition">Squeeze Fired</button>
+            <button id="btn-in-squeeze" class="px-4 py-2 rounded-md text-sm font-medium transition">In Squeeze</button>
+        </div>
+        <p id="description" class="text-center text-gray-400 mb-6"></p>
         <div id="chart" class="chart-container"></div>
         <div class="tooltip"></div>
     </div>
@@ -79,43 +84,63 @@
     <script>
         const chartContainer = d3.select("#chart");
         const tooltip = d3.select(".tooltip");
+        const btnFired = document.getElementById('btn-fired');
+        const btnInSqueeze = document.getElementById('btn-in-squeeze');
+        const description = document.getElementById('description');
+
+        let currentMode = 'fired'; // 'fired' or 'in_squeeze'
+        let refreshInterval;
+
+        // --- Color Scales ---
+        const rvolDomain = [0, 5];
+        const bullishColor = d3.scaleLinear().domain(rvolDomain).range(["#064e3b", "#10b981"]).clamp(true);
+        const bearishColor = d3.scaleLinear().domain(rvolDomain).range(["#7f1d1d", "#ef4444"]).clamp(true);
+        const neutralColor = d3.scaleLinear().domain(rvolDomain).range(["#374151", "#6b7280"]).clamp(true);
+        const inSqueezeColor = d3.scaleLinear().domain(rvolDomain).range(["#166534", "#22c55e"]).clamp(true);
+
+        function getCellColor(d) {
+            if (currentMode === 'fired') {
+                if (d.momentum === 'Bullish') return bullishColor(d.rvol);
+                if (d.momentum === 'Bearish') return bearishColor(d.rvol);
+                return neutralColor(d.rvol);
+            }
+            return inSqueezeColor(d.rvol);
+        }
+
+        function getTooltipHtml(d) {
+            if (currentMode === 'fired') {
+                return `<strong>${d.name.replace('NSE:', '')}</strong><br/>` +
+                       `Momentum: <span style="color: ${getCellColor(d)};">${d.momentum}</span><br/>` +
+                       `RVOL: ${d.rvol.toFixed(2)}<br/>` +
+                       `Score: ${d.value.toFixed(2)}`;
+            }
+            return `<strong>${d.name.replace('NSE:', '')}</strong><br/>` +
+                   `Squeeze on ${d.count} timeframes<br/>` +
+                   `RVOL: ${d.rvol.toFixed(2)}<br/>` +
+                   `Score: ${d.value.toFixed(2)}`;
+        }
 
         async function loadData() {
+            const filename = currentMode === 'fired' ? 'treemap_data_fired.json' : 'treemap_data_in_squeeze.json';
             try {
-                const data = await d3.json(`treemap_data.json?t=${new Date().getTime()}`);
-
-                // Sort data by HeatmapScore (value)
+                const data = await d3.json(`${filename}?t=${new Date().getTime()}`);
                 data.sort((a, b) => b.value - a.value);
-
-                // Define a single color scale based on RVOL
-                // Using a green scale, as "in a squeeze" is a state of interest
-                const colorScale = d3.scaleLinear()
-                    .domain([0, 5]) // RVOL typically ranges from 0 to 5+
-                    .range(["#166534", "#22c55e"]) // Dark green to bright green
-                    .clamp(true);
 
                 // --- D3 Data Binding ---
                 const cells = chartContainer.selectAll(".cell")
                     .data(data, d => d.name);
 
-                // Exit selection
                 cells.exit().remove();
 
-                // Enter selection
                 const enterCells = cells.enter()
                     .append("div")
                     .attr("class", "cell")
                     .on("click", (event, d) => window.open(d.url, "_blank"))
                     .on("mouseover", function(event, d) {
                         tooltip.transition().duration(200).style("opacity", .9);
-                        tooltip.html(
-                            `<strong>${d.name.replace('NSE:', '')}</strong><br/>` +
-                            `Squeeze on ${d.count} timeframes<br/>` +
-                            `RVOL: ${d.rvol.toFixed(2)}<br/>` +
-                            `Score: ${d.value.toFixed(2)}`
-                        )
-                        .style("left", (event.pageX + 10) + "px")
-                        .style("top", (event.pageY - 28) + "px");
+                        tooltip.html(getTooltipHtml(d))
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 28) + "px");
                     })
                     .on("mouseout", function(d) {
                         tooltip.transition().duration(500).style("opacity", 0);
@@ -124,32 +149,47 @@
                 enterCells.append("img").attr("class", "stock-logo");
                 enterCells.append("div").attr("class", "stock-ticker");
                 enterCells.append("div").attr("class", "stock-info");
- 
-                // Merge enter and update selections
+
                 const updateCells = enterCells.merge(cells);
- 
 
-                // Update all cells
-                updateCells.style("background-color", d => colorScale(d.rvol));
-
- 
-                updateCells.select(".stock-logo")
-                    .attr("src", d => d.logo)
-                    .style("display", d => d.logo ? 'block' : 'none');
-
+                updateCells.style("background-color", d => getCellColor(d));
+                updateCells.select(".stock-logo").attr("src", d => d.logo).style("display", d => d.logo ? 'block' : 'none');
                 updateCells.select(".stock-ticker").text(d => d.name.replace('NSE:', ''));
                 updateCells.select(".stock-info").text(d => `RVOL: ${d.rvol.toFixed(2)}`);
 
             } catch (error) {
-                console.error("Failed to load or process data:", error);
-                chartContainer.html("<p class='text-center text-red-500'>Failed to load data. Please check the console.</p>");
+                console.error(`Failed to load data from ${filename}:`, error);
+                chartContainer.html(`<p class='text-center text-red-500'>Could not load heatmap data. Is the Python scanner running?</p>`);
             }
- 
         }
 
-        // Initial data load and interval
-        loadData();
-        setInterval(loadData, 120000);
+        function setMode(mode) {
+            currentMode = mode;
+
+            if (mode === 'fired') {
+                btnFired.classList.add('bg-blue-600', 'text-white');
+                btnFired.classList.remove('bg-gray-700', 'text-gray-300');
+                btnInSqueeze.classList.add('bg-gray-700', 'text-gray-300');
+                btnInSqueeze.classList.remove('bg-blue-600', 'text-white');
+                description.innerText = 'Heatmap of stocks that have just broken out of a volatility squeeze.';
+            } else {
+                btnInSqueeze.classList.add('bg-blue-600', 'text-white');
+                btnInSqueeze.classList.remove('bg-gray-700', 'text-gray-300');
+                btnFired.classList.add('bg-gray-700', 'text-gray-300');
+                btnFired.classList.remove('bg-blue-600', 'text-white');
+                description.innerText = 'Heatmap of stocks that are currently in a state of low volatility.';
+            }
+            loadData();
+        }
+
+        btnFired.addEventListener('click', () => setMode('fired'));
+        btnInSqueeze.addEventListener('click', () => setMode('in_squeeze'));
+
+        // Initial setup
+        setMode('fired');
+        if (refreshInterval) clearInterval(refreshInterval);
+        refreshInterval = setInterval(loadData, 120000);
+
     </script>
 </body>
 </html>
