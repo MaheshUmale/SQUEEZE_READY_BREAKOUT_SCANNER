@@ -4,7 +4,9 @@ import json
 from time import sleep
 from datetime import datetime
 import numpy as np
+
 import sqlite3
+
 from tradingview_screener import Query, col, And, Or
 import pandas as pd
 
@@ -73,7 +75,9 @@ def generate_heatmap_json(df, output_path):
 
 
 # --- Configuration ---
+
 DB_FILE = 'squeeze_history.db'
+
 OUTPUT_JSON_FIRED = 'treemap_data_fired.json'
 OUTPUT_JSON_IN_SQUEEZE = 'treemap_data_in_squeeze.json'
 TIME_INTERVAL_SECONDS = 120
@@ -102,6 +106,7 @@ def get_highest_squeeze_tf(row):
         if row.get(f'InSqueeze{tf_suffix}', False):
             return tf_display_map[tf_suffix]
     return 'Unknown'
+
 
 
 def init_db():
@@ -162,10 +167,29 @@ while True:
     try:
         # 1. Load the list of tickers that were in a squeeze previously
         prev_squeeze_list = load_previous_squeeze_list_from_db()
-        print(f"Loaded {len(prev_squeeze_list)} tickers from the previous scan.")
+=======
+def load_previous_squeeze_list(filepath):
+    if os.path.exists(filepath):
+        with open(filepath, 'r') as f:
+            return json.load(f)
+    return []
+
+
+def save_current_squeeze_list(data, filepath):
+    with open(filepath, 'w') as f:
+        json.dump(data, f)
+
+
+# --- Main Loop ---
+while True:
+    try:
+        # 1. Load the list of tickers that were in a squeeze previously
+        prev_squeeze_list = load_previous_squeeze_list(PREV_SQUEEZE_FILE)
+
 
         # 2. Find all stocks currently in a squeeze (fetch full data)
         squeeze_conditions = [
+
             And(
                 col(f'BB.upper{tf}') < col(f'KltChnl.upper{tf}'),
                 col(f'BB.lower{tf}') > col(f'KltChnl.lower{tf}')
@@ -173,12 +197,14 @@ while True:
         ]
         query_in_squeeze = Query().select(*select_cols).where2(
             And(
+
                 col('is_primary') == True, col('typespecs').has('common'), col('type') == 'stock',
                 col('exchange') == 'NSE', col('close').between(20, 10000), col('active_symbol') == True,
                 col('average_volume_10d_calc|5') > 50000, col('Value.Traded|5') > 10000000,
                 Or(*squeeze_conditions)
             )
         ).limit(500).set_markets('india')
+
 
         _, df_in_squeeze = query_in_squeeze.get_scanner_data()
 
@@ -192,6 +218,7 @@ while True:
             df_in_squeeze['URL'] = "https://in.tradingview.com/chart/N8zfIJVK/?symbol=" + df_in_squeeze['encodedTicker']
             df_in_squeeze['logo'] = df_in_squeeze['logoid'].apply(
                 lambda x: f"https://s3-symbol-logo.tradingview.com/{x}.svg" if pd.notna(x) and x.strip() else '')
+
 
             squeeze_count_cols = []
             for tf in timeframes:
@@ -248,7 +275,9 @@ while True:
             generate_heatmap_json(pd.DataFrame(), OUTPUT_JSON_FIRED)
 
         # 4. Save the current list of squeezed stocks for the next iteration
+
         save_current_squeeze_list_to_db(current_squeeze_list)
+
         print(f"Saved {len(current_squeeze_list)} currently squeezed tickers for the next scan.")
 
     except Exception as e:
