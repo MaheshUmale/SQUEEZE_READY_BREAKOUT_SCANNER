@@ -17,6 +17,7 @@ This project provides a real-time scanner that identifies stocks where a TTM Squ
 
 ## Setup and Usage
 
+
 ### 1. Install Dependencies
 
 First, ensure you have Python 3 installed. Then, install the required packages using pip:
