@@ -110,7 +110,8 @@ select_cols = [
     'name', 'logoid', 'close', 'volume|5', 'Value.Traded|5', 'average_volume_10d_calc|5', 'MACD.hist'
 ]
 for tf in timeframes:
-    select_cols.extend([f'KltChnl.lower{tf}', f'KltChnl.upper{tf}', f'BB.lower{tf}', f'BB.upper{tf}', f'SMA20{tf}', f'ATR{tf}'])
+    select_cols.extend([f'KltChnl.lower{tf}', f'KltChnl.upper{tf}', f'BB.lower{tf}', f'BB.upper{tf}', f'ATR{tf}', f'SMA.20{tf}'])
+
 
 
 def get_highest_squeeze_tf(row):
@@ -172,6 +173,9 @@ def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
+ 
+    # Check for schema changes (volatility column)
+ 
     # Check for schema changes
     try:
         cursor.execute("PRAGMA table_info(squeeze_history)")
@@ -179,8 +183,9 @@ def init_db():
         if 'volatility' not in columns or 'timeframe' not in columns or columns.get('scan_timestamp') != 'TIMESTAMP':
              print("Schema outdated. Recreating squeeze_history table.")
              cursor.execute("DROP TABLE IF EXISTS squeeze_history")
+
     except sqlite3.OperationalError:
-        # Table doesn't exist, will be created.
+        # Table doesn't exist, so it will be created.
         pass
 
     cursor.execute('''
@@ -189,7 +194,9 @@ def init_db():
             scan_timestamp TIMESTAMP NOT NULL,
             ticker TEXT NOT NULL,
             timeframe TEXT NOT NULL,
+
             volatility REAL NOT NULL
+
         )
     ''')
     # Create an index for faster lookups
@@ -199,34 +206,44 @@ def init_db():
 
 
 def load_previous_squeeze_list_from_db():
-    """Loads the list of (ticker, timeframe) tuples from the most recent scan."""
+    """
+    Loads the list of (ticker, timeframe) tuples from the most recent scan
+    for comparison, ignoring volatility.
+    """
     conn = sqlite3.connect(DB_FILE, detect_types=sqlite3.PARSE_DECLTYPES)
     cursor = conn.cursor()
 
-    cursor.execute('SELECT MAX(scan_timestamp) FROM squeeze_history')
-    last_timestamp = cursor.fetchone()[0]
+    try:
+        cursor.execute('SELECT MAX(scan_timestamp) FROM squeeze_history')
+        last_timestamp = cursor.fetchone()[0]
 
-    if last_timestamp is None:
+        if last_timestamp is None:
+            return []
+
+        # We only need ticker and timeframe for identifying fired squeezes
+        cursor.execute('SELECT ticker, timeframe FROM squeeze_history WHERE scan_timestamp = ?', (last_timestamp,))
+        squeeze_pairs = [(row[0], row[1]) for row in cursor.fetchall()]
+        return squeeze_pairs
+
+    finally:
         conn.close()
-        return []
-
-    cursor.execute('SELECT ticker, timeframe FROM squeeze_history WHERE scan_timestamp = ?', (last_timestamp,))
-    squeeze_pairs = [(row[0], row[1]) for row in cursor.fetchall()]
-
-    conn.close()
-    return squeeze_pairs
 
 
-def save_current_squeeze_list_to_db(squeeze_data):
-    """Saves the current list of (ticker, timeframe, volatility) tuples to the database."""
-    if not squeeze_data:
-        return # Don't save if there's nothing to save
+ 
+def save_current_squeeze_list_to_db(squeeze_pairs):
+    """Saves the current list of (ticker, timeframe, volatility) pairs to the database."""
+    if not squeeze_pairs:
+        return  # Don't save if there's nothing to save
+ 
 
     conn = sqlite3.connect(DB_FILE, detect_types=sqlite3.PARSE_DECLTYPES)
     cursor = conn.cursor()
     now = datetime.now()
 
-    data_to_insert = [(now, ticker, tf, vol) for ticker, tf, vol in squeeze_data]
+ 
+    # squeeze_pairs is a list of (ticker, timeframe, volatility) tuples
+    data_to_insert = [(now, ticker, tf, vol) for ticker, tf, vol in squeeze_pairs]
+ 
     cursor.executemany('INSERT INTO squeeze_history (scan_timestamp, ticker, timeframe, volatility) VALUES (?, ?, ?, ?)',
                        data_to_insert)
 
@@ -264,14 +281,24 @@ while True:
         if df_in_squeeze is not None and not df_in_squeeze.empty:
             print(f"Found {len(df_in_squeeze)} tickers currently in a squeeze across all timeframes.")
 
-            # Create a list of all (ticker, timeframe, volatility) tuples currently in a squeeze
+ 
+            # Create a list of all (ticker, timeframe, volatility) pairs currently in a squeeze
+ 
             for _, row in df_in_squeeze.iterrows():
                 for tf_suffix, tf_name in tf_display_map.items():
                     is_in_squeeze = (row[f'BB.upper{tf_suffix}'] < row[f'KltChnl.upper{tf_suffix}']) and \
                                     (row[f'BB.lower{tf_suffix}'] > row[f'KltChnl.lower{tf_suffix}'])
                     if is_in_squeeze:
-                        volatility = calculate_volatility(row, tf_suffix)
-                        current_squeeze_data.append((row['ticker'], tf_name, volatility))
+
+                        atr = row.get(f'ATR{tf_suffix}')
+                        close = row.get('close')
+                        # Calculate volatility, handle potential division by zero or NaN values
+                        if pd.notna(atr) and pd.notna(close) and close != 0:
+                            volatility = (atr / close) * 100
+                        else:
+                            volatility = 0
+                        current_squeeze_pairs.append((row['ticker'], tf_name, volatility))
+ 
 
             # --- Process and save "In Squeeze" data ---
             df_in_squeeze['encodedTicker'] = df_in_squeeze['ticker'].apply(urllib.parse.quote)
@@ -302,8 +329,11 @@ while True:
             generate_heatmap_json(pd.DataFrame(), OUTPUT_JSON_IN_SQUEEZE)
 
         # 3. Identify and process "Squeeze Fired" stocks
-        current_squeeze_pairs = [(ticker, tf) for ticker, tf, vol in current_squeeze_data]
-        fired_pairs = set(prev_squeeze_pairs) - set(current_squeeze_pairs)
+
+        # Create a set of (ticker, timeframe) from the current squeeze data for accurate comparison
+        current_squeeze_set = {(ticker, tf) for ticker, tf, vol in current_squeeze_pairs}
+        fired_pairs = set(prev_squeeze_pairs) - current_squeeze_set
+
         fired_tickers = list(set(ticker for ticker, tf in fired_pairs))
         print(f"Found {len(fired_pairs)} (ticker, timeframe) pairs where squeeze has fired.")
 
@@ -318,12 +348,15 @@ while True:
                 df_fired['logo'] = df_fired['logoid'].apply(
                     lambda x: f"https://s3-symbol-logo.tradingview.com/{x}.svg" if pd.notna(x) and x.strip() else '')
 
-                df_fired['SqueezeCount'] = 1
+                # Ensure all required columns for the heatmap are present for "fired" squeezes
                 avg_vol = df_fired['average_volume_10d_calc|5'].replace(0, np.nan)
                 df_fired['rvol'] = (df_fired['volume|5'] / avg_vol).fillna(0)
                 df_fired['momentum'] = df_fired['MACD.hist'].apply(get_momentum_indicator)
-                df_fired['squeeze_strength'] = 'N/A' # Not applicable for fired squeezes
-                df_fired['highest_tf'] = 'N/A' # Not applicable for fired squeezes
+
+                # Set default values for columns that are not applicable to fired squeezes
+                df_fired['SqueezeCount'] = 1
+                df_fired['highest_tf'] = 'N/A'
+                df_fired['squeeze_strength'] = 'N/A'
 
                 momentum_map = {'Bullish': 1, 'Neutral': 0.5, 'Bearish': -1}
                 df_fired['HeatmapScore'] = (df_fired['rvol'] + 1) * df_fired['SqueezeCount'] * df_fired['momentum'].map(momentum_map)
