@@ -41,13 +41,13 @@ def generate_heatmap_json(df, output_path):
     Generates a simple, flat JSON array of stock data for the D3 heatmap.
     """
     # Ensure required columns exist for JSON generation
-    required_cols = ['ticker', 'HeatmapScore', 'SqueezeCount', 'rvol', 'URL', 'logo', 'momentum', 'highest_tf']
+    required_cols = ['ticker', 'HeatmapScore', 'SqueezeCount', 'rvol', 'URL', 'logo', 'momentum', 'highest_tf', 'squeeze_strength']
     for c in required_cols:
         if c not in df.columns:
             # Provide a default value if a column is missing
             if c == 'momentum':
                 df[c] = 'Neutral'
-            elif c == 'highest_tf':
+            elif c == 'highest_tf' or c == 'squeeze_strength':
                 df[c] = 'N/A'
             else:
                 df[c] = 0 if 'Score' in c or 'Count' in c or 'rvol' in c else ''
@@ -63,7 +63,8 @@ def generate_heatmap_json(df, output_path):
             "url": row['URL'],
             "logo": row['logo'],
             "momentum": row['momentum'],
-            "highest_tf": row['highest_tf']
+            "highest_tf": row['highest_tf'],
+            "squeeze_strength": row['squeeze_strength']
         })
 
     # Write the JSON file
@@ -88,6 +89,7 @@ tf_display_map = {
     '': 'Daily', '|1': '1m', '|5': '5m', '|15': '15m', '|30': '30m',
     '|60': '1H', '|120': '2H', '|240': '4H', '|1W': 'Weekly', '|1M': 'Monthly'
 }
+tf_suffix_map = {v: k for k, v in tf_display_map.items()}
 
 # Construct select columns for all timeframes
 select_cols = [
@@ -102,6 +104,39 @@ def get_highest_squeeze_tf(row):
         if row.get(f'InSqueeze{tf_suffix}', False):
             return tf_display_map[tf_suffix]
     return 'Unknown'
+
+def get_squeeze_strength(row):
+    """Calculates and categorizes the strength of the squeeze."""
+    highest_tf_name = row['highest_tf']
+    tf_suffix = tf_suffix_map.get(highest_tf_name)
+
+    if tf_suffix is None:
+        return "N/A"
+
+    bb_upper = row.get(f'BB.upper{tf_suffix}')
+    bb_lower = row.get(f'BB.lower{tf_suffix}')
+    kc_upper = row.get(f'KltChnl.upper{tf_suffix}')
+    kc_lower = row.get(f'KltChnl.lower{tf_suffix}')
+
+    if any(pd.isna(val) for val in [bb_upper, bb_lower, kc_upper, kc_lower]):
+        return "N/A"
+
+    bb_width = bb_upper - bb_lower
+    kc_width = kc_upper - kc_lower
+
+    if bb_width == 0:
+        return "N/A" # Avoid division by zero
+
+    sqz_strength = kc_width / bb_width
+
+    if sqz_strength >= 2:
+        return "VERY STRONG"
+    elif sqz_strength >= 1.5:
+        return "STRONG"
+    elif sqz_strength > 1:
+        return "Regular"
+    else:
+        return "N/A"
 
 
 def init_db():
@@ -218,6 +253,7 @@ while True:
                 squeeze_count_cols.append(col_name)
             df_in_squeeze['SqueezeCount'] = df_in_squeeze[squeeze_count_cols].sum(axis=1)
             df_in_squeeze['highest_tf'] = df_in_squeeze.apply(get_highest_squeeze_tf, axis=1)
+            df_in_squeeze['squeeze_strength'] = df_in_squeeze.apply(get_squeeze_strength, axis=1)
 
             avg_vol = df_in_squeeze['average_volume_10d_calc|5'].replace(0, np.nan)
             df_in_squeeze['rvol'] = (df_in_squeeze['volume|5'] / avg_vol).fillna(0)
