@@ -37,7 +37,7 @@ def generate_heatmap_json(df, output_path='treemap_data.json'):
     Generates a hierarchical JSON file from the DataFrame for the D3 heatmap.
     """
     # Ensure required columns exist
-    required_cols = ['ticker', 'HeatmapScore', 'TotalSqueezeFiredCount', 'Momentum', 'rvol', 'URL']
+    required_cols = ['ticker', 'HeatmapScore', 'TotalSqueezeFiredCount', 'Momentum', 'rvol', 'URL', 'logo']
     if not all(col in df.columns for col in required_cols):
         print("⚠️ Cannot generate JSON. DataFrame is missing one or more required columns.")
         return
@@ -70,7 +70,8 @@ def generate_heatmap_json(df, output_path='treemap_data.json'):
                 "count": row['TotalSqueezeFiredCount'],
                 "momentum": row['Momentum'], # This might be redundant but good for debugging
                 "rvol": row['rvol'],
-                "url": row['URL']
+                "url": row['URL'],
+                "logo": row['logo']
             })
 
         heatmap_data["children"].append(group_dict)
@@ -174,7 +175,7 @@ VOLUME_MULTIPLIER =  5.0
 writeHeader=True
 while True :
     query = Query().select(
-        'name',                    # Stock name
+        'name', 'logoid',           # Stock name and logo ID
         'close',                   # Current price
         'volume|5',                # 1-minute volume
         'Value.Traded|5',          # 1-minute traded value
@@ -276,6 +277,12 @@ while True :
         dfNew['encodedTicker'] = dfNew['ticker'].apply(urllib.parse.quote)
         dfNew['URL'] = "https://in.tradingview.com/chart/N8zfIJVK/?symbol="+dfNew['encodedTicker']+" "
         dfNew.insert(0, 'current_timestamp', current_time)
+
+        # Construct logo URL from logoid
+        if 'logoid' in dfNew.columns:
+            dfNew['logo'] = dfNew['logoid'].apply(lambda x: f"https://s3-symbol-logo.tradingview.com/{x}.svg" if pd.notna(x) and x.strip() else '')
+        else:
+            dfNew['logo'] = ''
 
         # Identify which stocks have a fired squeeze
         processed_df = identify_squeeze_fired_across_timeframes(dfNew)

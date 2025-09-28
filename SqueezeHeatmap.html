@@ -17,15 +17,20 @@
         .cell {
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            justify-content: space-between; /* Adjusted for logo and text */
             align-items: center;
             color: white;
             padding: 8px;
             border-radius: 4px;
             cursor: pointer;
             text-align: center;
-            height: 80px;
+            height: 100px; /* Increased height for logo */
             transition: transform 0.2s;
+        }
+        .stock-logo {
+            width: 32px; /* Set a fixed width */
+            height: 32px; /* Set a fixed height */
+            margin-bottom: 5px; /* Space between logo and ticker */
         }
         .cell:hover {
             transform: scale(1.05);
@@ -123,21 +128,28 @@
                     tooltip.transition().duration(500).style("opacity", 0);
                 });
 
-            // Add child elements for the text within each cell
+            // Add child elements for the logo and text within each cell
+            enterCells.append("img")
+                .attr("class", "stock-logo")
+                .attr("src", d => d.data.logo)
+                .style("display", d => d.data.logo ? 'block' : 'none'); // Hide if no logo
             enterCells.append("div").attr("class", "stock-ticker");
             enterCells.append("div").attr("class", "stock-rvol");
 
             // Merge enter and update selections to apply updates to all existing cells
             const updateCells = enterCells.merge(cells);
 
-            // Update styling and text for all cells (both new and existing)
+            // Update styling, logo, and text for all cells (both new and existing)
             updateCells
                 .style("background-color", d => {
                     const group = getMomentumGroup(d);
-                    // Clamp RVOL to the domain max to prevent invalid colors
                     const rvol = Math.min(d.data.rvol, 5);
                     return colorScales[group](rvol);
                 });
+
+            updateCells.select(".stock-logo")
+                .attr("src", d => d.data.logo)
+                .style("display", d => d.data.logo ? 'block' : 'none');
 
             updateCells.select(".stock-ticker").text(d => d.data.name.replace('NSE:', ''));
             updateCells.select(".stock-rvol").text(d => `RVOL: ${d.data.rvol.toFixed(2)}`);
