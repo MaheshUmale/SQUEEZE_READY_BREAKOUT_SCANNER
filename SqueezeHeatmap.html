@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Squeeze Heatmap</title>
+    <title>Stock Squeeze Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
@@ -26,6 +26,14 @@
         }
         .section-title.collapsed .arrow {
             transform: rotate(-90deg);
+        }
+        .filter-btn.active {
+            background-color: #2563eb; /* blue-600 */
+            color: white;
+        }
+        .filter-btn {
+             background-color: #374151; /* gray-700 */
+             color: #d1d5db; /* gray-300 */
         }
         .grid-container {
             display: grid;
@@ -117,7 +125,13 @@
 </head>
 <body class="bg-gray-900">
     <div class="container mx-auto p-4">
-        <h1 class="text-3xl font-bold text-center mb-6">Real-Time Stock Squeeze Dashboard</h1>
+        <h1 class="text-3xl font-bold text-center mb-4">Real-Time Stock Squeeze Dashboard</h1>
+        <div id="filter-controls" class="flex justify-center items-center my-4 space-x-2">
+            <span class="text-sm font-medium text-gray-400 mr-2">Filter Squeeze Strength:</span>
+            <button data-strength="ALL" class="filter-btn px-3 py-1 rounded-md text-sm font-medium transition">ALL</button>
+            <button data-strength="STRONG" class="filter-btn px-3 py-1 rounded-md text-sm font-medium transition">STRONG</button>
+            <button data-strength="VERY STRONG" class="filter-btn px-3 py-1 rounded-md text-sm font-medium transition">VERY STRONG</button>
+        </div>
 
         <!-- Squeeze Fired Section -->
         <div id="fired-section-wrapper" class="mb-8">
@@ -139,6 +153,8 @@
         const inSqueezeContainer = d3.select("#in-squeeze-container");
         const tooltip = d3.select(".tooltip");
         let refreshInterval;
+        let fullInSqueezeData = [];
+        let currentStrengthFilter = 'ALL';
 
         // --- Color Scales ---
         const rvolDomain = [0, 5];
@@ -193,7 +209,7 @@
         }
 
         function renderInSqueeze(data) {
-            inSqueezeContainer.html(data.length === 0 ? "<p class='text-gray-400'>No stocks are currently in a squeeze.</p>" : "");
+            inSqueezeContainer.html(data.length === 0 ? "<p class='text-gray-400'>No stocks match the current filter.</p>" : "");
             const tfOrder = ['Monthly', 'Weekly', '4H', '2H', '1H', '30m', '15m', '5m', '1m', 'Daily', 'Unknown'];
             const groupedData = d3.group(data, d => d.highest_tf);
             const sortedGroups = Array.from(groupedData.entries()).sort((a, b) => tfOrder.indexOf(a[0]) - tfOrder.indexOf(b[0]));
@@ -243,14 +259,52 @@
             });
         }
 
+        function applyFiltersAndRender() {
+            let filteredData = fullInSqueezeData;
+            if (currentStrengthFilter !== 'ALL') {
+                const strengthLevels = {
+                    'STRONG': ['STRONG', 'VERY STRONG'],
+                    'VERY STRONG': ['VERY STRONG']
+                };
+                const activeLevels = strengthLevels[currentStrengthFilter];
+                if (activeLevels) {
+                    filteredData = fullInSqueezeData.filter(d => activeLevels.includes(d.squeeze_strength));
+                }
+            }
+            renderInSqueeze(filteredData);
+        }
+
+        function setupControls() {
+            // Collapsible sections
+            d3.selectAll('.section-title').on('click', function() {
+                const container = d3.select(this.parentNode).select('.grid-container, #in-squeeze-container');
+                const isCollapsed = container.style('display') === 'none';
+                container.style('display', isCollapsed ? null : 'none');
+                d3.select(this).classed('collapsed', !isCollapsed);
+            });
+
+            // Filter buttons
+            const filterButtons = d3.selectAll('.filter-btn');
+            filterButtons.on('click', function() {
+                currentStrengthFilter = d3.select(this).attr('data-strength');
+                filterButtons.classed('active', false);
+                d3.select(this).classed('active', true);
+                applyFiltersAndRender();
+            });
+            d3.select(`.filter-btn[data-strength="${currentStrengthFilter}"]`).classed('active', true);
+        }
+
         async function loadData() {
             try {
                 const [firedData, inSqueezeData] = await Promise.all([
                     d3.json(`treemap_data_fired.json?t=${new Date().getTime()}`),
                     d3.json(`treemap_data_in_squeeze.json?t=${new Date().getTime()}`)
                 ]);
+
+                fullInSqueezeData = inSqueezeData;
                 renderFired(firedData.sort((a, b) => b.value - a.value));
-                renderInSqueeze(inSqueezeData);
+                applyFiltersAndRender();
+
             } catch (error) {
                 console.error("Failed to load data:", error);
                 firedContainer.html("<p class='text-center text-red-500'>Could not load 'Fired' data.</p>");
@@ -258,18 +312,9 @@
             }
         }
 
-        function setupCollapsibleSections() {
-            d3.selectAll('.section-title').on('click', function() {
-                const container = d3.select(this.parentNode).select('.grid-container, #in-squeeze-container');
-                const isCollapsed = container.style('display') === 'none';
-                container.style('display', isCollapsed ? null : 'none');
-                d3.select(this).classed('collapsed', !isCollapsed);
-            });
-        }
-
-        // Initial data load and interval
+        // Initial setup
         loadData();
-        setupCollapsibleSections();
+        setupControls();
         refreshInterval = setInterval(loadData, 120000);
     </script>
 </body>
