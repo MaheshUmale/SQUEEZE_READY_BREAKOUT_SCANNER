@@ -14,6 +14,18 @@
             margin-bottom: 1rem;
             padding-bottom: 0.5rem;
             border-bottom: 2px solid #4b5563;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            user-select: none;
+        }
+        .section-title .arrow {
+            margin-right: 12px;
+            transition: transform 0.2s;
+            font-size: 1rem;
+        }
+        .section-title.collapsed .arrow {
+            transform: rotate(-90deg);
         }
         .grid-container {
             display: grid;
@@ -41,9 +53,11 @@
             transform: rotate(-90deg);
         }
         .momentum-columns {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
+            display: flex;
             gap: 1.5rem;
+        }
+        .bullish-col, .bearish-col {
+            flex: 1;
         }
         .cell {
             position: relative;
@@ -106,14 +120,14 @@
         <h1 class="text-3xl font-bold text-center mb-6">Real-Time Stock Squeeze Dashboard</h1>
 
         <!-- Squeeze Fired Section -->
-        <div class="mb-8">
-            <h2 class="section-title">Squeeze Fired</h2>
+        <div id="fired-section-wrapper" class="mb-8">
+            <h2 class="section-title"><span class="arrow">&#9662;</span>Squeeze Fired</h2>
             <div id="fired-container" class="grid-container"></div>
         </div>
 
         <!-- In Squeeze Section -->
-        <div>
-            <h2 class="section-title">In Squeeze</h2>
+        <div id="in-squeeze-section-wrapper">
+            <h2 class="section-title"><span class="arrow">&#9662;</span>In Squeeze</h2>
             <div id="in-squeeze-container"></div>
         </div>
 
@@ -209,11 +223,17 @@
                 const bullishStocks = stocks.filter(s => s.momentum === 'Bullish').sort((a,b) => b.value - a.value);
                 const bearishStocks = stocks.filter(s => s.momentum === 'Bearish').sort((a,b) => b.value - a.value);
 
-                const bullishCells = d3.select(this).select('.bullish-col .grid-container').selectAll('.cell').data(bullishStocks, d => d.name);
+                const bullishColEl = d3.select(this).select('.bullish-col');
+                const bearishColEl = d3.select(this).select('.bearish-col');
+
+                bullishColEl.style('display', bullishStocks.length > 0 ? null : 'none');
+                bearishColEl.style('display', bearishStocks.length > 0 ? null : 'none');
+
+                const bullishCells = bullishColEl.select('.grid-container').selectAll('.cell').data(bullishStocks, d => d.name);
                 bullishCells.exit().remove();
                 renderCells(bullishCells, 'in_squeeze');
 
-                const bearishCells = d3.select(this).select('.bearish-col .grid-container').selectAll('.cell').data(bearishStocks, d => d.name);
+                const bearishCells = bearishColEl.select('.grid-container').selectAll('.cell').data(bearishStocks, d => d.name);
                 bearishCells.exit().remove();
                 renderCells(bearishCells, 'in_squeeze');
             });
@@ -234,8 +254,18 @@
             }
         }
 
+        function setupCollapsibleSections() {
+            d3.selectAll('.section-title').on('click', function() {
+                const container = d3.select(this.parentNode).select('.grid-container, #in-squeeze-container');
+                const isCollapsed = container.style('display') === 'none';
+                container.style('display', isCollapsed ? null : 'none');
+                d3.select(this).classed('collapsed', !isCollapsed);
+            });
+        }
+
         // Initial data load and interval
         loadData();
+        setupCollapsibleSections();
         refreshInterval = setInterval(loadData, 120000);
     </script>
 </body>
