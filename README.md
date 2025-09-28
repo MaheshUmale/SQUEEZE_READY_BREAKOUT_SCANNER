@@ -1,78 +1,48 @@
-# SQUEEZE_READY_BREAKOUT_SCANNER
-TTM SQUEEZE Ready for beak-out on higher time frame
-THIS CODE WILL DO THE BACKTESTING OF STOCKS On DAILY,WEEKLY and MONTHLY TIMEFRAME BASED ON ALGORITHM BELOW for NSE INDIA.
+# Real-Time Stock Squeeze "Fired" Scanner & Heatmap
 
-The following algorithm details the process for forecasting significant market breakouts by combining volatility compression (representing built-up energy) and volume (representing the necessary fuel), based on the analysis of historical powerful patterns  
+This project provides a real-time scanner that identifies stocks where a TTM Squeeze has recently "fired" (i.e., the stock has transitioned from a state of low volatility to high volatility). The results are visualized as an interactive heatmap in your web browser, which updates automatically.
 
-# IT WILL USE 
-from tvDatafeed import TvDatafeed,Interval
-#USE fetch  data from tvDatafeed ( tradingview )
+## Core Components
 
-tv = TvDatafeed() //for getting daily weekly monthly data from Tradingview.
+-   **`BBSqueeze.py`**: The Python backend script that continuously scans the market using the `tradingview_screener` library. It detects when a squeeze has fired across multiple timeframes, determines the breakout momentum (Bullish or Bearish), and generates a `treemap_data.json` file with the results.
+-   **`SqueezeHeatmap.html`**: A single-page web application that visualizes the data from `treemap_data.json`. It uses D3.js to create an interactive heatmap where stocks are grouped by momentum and colored by relative volume (RVOL).
+-   **`requirements.txt`**: Lists the necessary Python dependencies.
 
+## How It Works
 
-It will do backtest for last 3 years of data.
-It will store data fetched and result in local SQLITE TABLE
+1.  The `BBSqueeze.py` script runs in a loop, scanning for stocks that were in a squeeze on the previous candle but are no longer in a squeeze on the current candle.
+2.  For each "fired" squeeze, it calculates the breakout momentum, relative volume (RVOL), and a "Heatmap Score".
+3.  The script then writes this data to a `treemap_data.json` file.
+4.  The `SqueezeHeatmap.html` page fetches this JSON file every two minutes and updates the heatmap visualization.
 
-# Calculate TTM Squeeze using pandas_ta
-squeeze_data = ta.squeeze(data['High'], data['Low'], data['Close'], append=True)
+## Setup and Usage
 
-USe below ALGORIThM Steps to find potential candidate and trigger price 
-Check volume levels on breakout of trigger price
-after confirming conditions mentioned below enter trade.
-follow below algorith detailed steps to enter set stop loss and exit 
-Detailed algorithm as below :
+### 1. Install Dependencies
 
-***
+First, ensure you have Python 3 installed. Then, install the required packages using pip:
 
-## Breakout Forecasting Algorithm: Volatility Compression and Volume
+```bash
+pip install -r requirements.txt
+```
 
-This method relies on identifying a state of significant energy buildup (Volatility Compression) followed by a definitive trigger (Breakout Price Level) confirmed by massive inflow (Significant Volume).
+### 2. Run the Scanner
 
-### Phase 1: Identifying Potential Energy (Volatility Compression)
+Open a terminal and run the Python script. It will start scanning and will generate the `treemap_data.json` file in the same directory.
 
-**Step 1.1: Select a Higher Time Frame for Context**
-To identify the potential for a major, long-lasting breakout, select a **higher time frame** chart (e.g., weekly or monthly). Knowing where the stock is in its volatility cycle on this higher time frame provides crucial context for trading.
+```bash
+python3 BBSqueeze.py
+```
 
-**Step 1.2: Apply and Monitor the Volatility Compression Indicator**
-Use an indicator designed to measure volatility compression, such as the **TTM Squeeze indicator** or the underlying **Bollinger Band squeeze concept**.
+The script will run continuously and update the JSON file every two minutes.
 
-**Step 1.3: Confirm Significant Energy Buildup (The Squeeze)**
-Monitor the indicator for the official "squeeze" signal, which indicates that the stock has built up a significant amount of energy:
-*   **TTM Squeeze Signal:** Look for the **red dots**, which signal that volatility has compressed to a significant level.
-*   **Definition of Squeeze:** This threshold is defined by the Bollinger Band squeezing *inside* the Kelner Channel.
-*   **Interpretation:** When the signal appears on the chosen high time frame, it confirms that there is **"plenty of energy in the tank"** for the stock to make a big move. Volatility compression is viewed as "pure potential".
+### 3. View the Heatmap
 
-### Phase 2: Defining the Breakout Trigger Level
+Open the `SqueezeHeatmap.html` file in your web browser (e.g., Chrome, Firefox).
 
-**Step 2.1: Identify the Consolidation Range**
-While the stock is in the squeeze (consolidation/compression), identify the price boundaries of this range on the chart.
+The heatmap will load automatically and will refresh every two minutes to show the latest scanner results.
 
-**Step 2.2: Define the Breakout Level**
-Establish the specific price level that, if exceeded, confirms the stock is moving out of consolidation and initiating the range expansion. This is the level that the stock is beginning to test.
+-   **Green cells**: Stocks with bullish momentum.
+-   **Red cells**: Stocks with bearish momentum.
+-   **Gray cells**: Neutral momentum.
 
-### Phase 3: Confirming the Fuel (Volume) and Trigger
-
-**Step 3.1: Monitor a Lower Time Frame for the Breakout**
-Once the high time frame squeeze is confirmed (Step 1.3) and the breakout level is defined (Step 2.2), monitor a **lower time frame** (e.g., the daily chart) for the actual breakout attempt.
-
-**Step 3.2: Confirm the Volume Outlier**
-For the breakout to be considered a strong signal, it must be accompanied by **significant volume**, interpreted as the "fuel" needed for range expansion.
-*   **Metric:** The required condition is a volume bar that is **greater than two standard deviations above the mean**.
-*   **Significance:** This quantifies the volume bar as an "outlier," which is specifically desired for a powerful move.
-
-**Step 3.3: Final Breakout Confirmation**
-The powerful breakout signal is confirmed when **all three conditions** are met:
-1.  A confirmed squeeze signal exists on the higher time frame (energy).
-2.  Price breaks the defined breakout level (trigger).
-3.  The breakout is accompanied by a volume bar that closes above the breakout level and is a greater than two standard deviation outlier (fuel).
-
-### Phase 4: Expected Outcome
-
-**Step 4.1: High Risk/Reward Opportunity**
-This combined signal generates an **"incredible risk reward opportunity"** for catching powerful moves.
-
-**Step 4.2: Expected Move Duration (Time Frame Dependence)**
-The anticipated duration of the resulting move depends on the time frame used for the initial squeeze signal:
-*   **Daily Breakouts:** Result in shorter moves, as it takes less time for the stock to work off the volatility expansion.
-*   **Monthly Breakouts:** If the monthly pattern triggers on volume (e.g., greater than two standard deviation volume bar on the weekly or daily closing above the level), the stock could be in a price discovery environment for the **next year or two**.
+The intensity of the color indicates the Relative Volume (RVOL), with brighter colors signifying higher RVOL. You can hover over any cell to see detailed information and click on it to open the stock's chart on TradingView.
