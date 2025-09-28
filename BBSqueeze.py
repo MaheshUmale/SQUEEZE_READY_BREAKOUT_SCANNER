@@ -8,6 +8,20 @@ import sqlite3
 from tradingview_screener import Query, col, And, Or
 import pandas as pd
 
+# --- SQLite Timestamp Handling ---
+def adapt_datetime_iso(val):
+    """Adapt datetime.datetime to timezone-naive ISO 8601 format."""
+    return val.isoformat()
+
+def convert_timestamp(val):
+    """Convert ISO 8601 string to datetime.datetime object."""
+    return datetime.fromisoformat(val.decode())
+
+# Register the adapter and converter
+sqlite3.register_adapter(datetime, adapt_datetime_iso)
+sqlite3.register_converter("timestamp", convert_timestamp)
+
+
 pd.set_option('display.expand_frame_repr', False)
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 0)
@@ -144,18 +158,21 @@ def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
-    # Check if the 'timeframe' column exists. If not, recreate the table.
-    # This is a simple migration strategy for development.
+    # Check for schema changes (timeframe column, timestamp type)
     try:
-        cursor.execute("SELECT timeframe FROM squeeze_history LIMIT 1")
+        cursor.execute("PRAGMA table_info(squeeze_history)")
+        columns = {col[1]: col[2] for col in cursor.fetchall()}
+        if 'timeframe' not in columns or columns.get('scan_timestamp') != 'TIMESTAMP':
+             print("Schema outdated. Recreating squeeze_history table.")
+             cursor.execute("DROP TABLE IF EXISTS squeeze_history")
     except sqlite3.OperationalError:
-        print("Schema outdated. Recreating squeeze_history table.")
-        cursor.execute("DROP TABLE IF EXISTS squeeze_history")
+        # Table doesn't exist, will be created.
+        pass
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS squeeze_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            scan_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            scan_timestamp TIMESTAMP NOT NULL,
             ticker TEXT NOT NULL,
             timeframe TEXT NOT NULL
         )
@@ -168,7 +185,7 @@ def init_db():
 
 def load_previous_squeeze_list_from_db():
     """Loads the list of (ticker, timeframe) tuples from the most recent scan."""
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(DB_FILE, detect_types=sqlite3.PARSE_DECLTYPES)
     cursor = conn.cursor()
 
     cursor.execute('SELECT MAX(scan_timestamp) FROM squeeze_history')
@@ -190,7 +207,7 @@ def save_current_squeeze_list_to_db(squeeze_pairs):
     if not squeeze_pairs:
         return # Don't save if there's nothing to save
 
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(DB_FILE, detect_types=sqlite3.PARSE_DECLTYPES)
     cursor = conn.cursor()
     now = datetime.now()
 
