@@ -17,15 +17,24 @@
         .cell {
             display: flex;
             flex-direction: column;
+
             justify-content: space-between;
+ 
             align-items: center;
             padding: 10px;
             border-radius: 6px;
             cursor: pointer;
             text-align: center;
+
             height: 110px;
             transition: transform 0.2s, background-color 0.2s;
             border: 1px solid #374151;
+
+        }
+        .stock-logo {
+            width: 32px; /* Set a fixed width */
+            height: 32px; /* Set a fixed height */
+            margin-bottom: 5px; /* Space between logo and ticker */
         }
         .cell:hover {
             transform: scale(1.05);
@@ -115,13 +124,15 @@
                 enterCells.append("img").attr("class", "stock-logo");
                 enterCells.append("div").attr("class", "stock-ticker");
                 enterCells.append("div").attr("class", "stock-info");
-
+ 
                 // Merge enter and update selections
                 const updateCells = enterCells.merge(cells);
+ 
 
                 // Update all cells
                 updateCells.style("background-color", d => colorScale(d.rvol));
 
+ 
                 updateCells.select(".stock-logo")
                     .attr("src", d => d.logo)
                     .style("display", d => d.logo ? 'block' : 'none');
@@ -133,6 +144,7 @@
                 console.error("Failed to load or process data:", error);
                 chartContainer.html("<p class='text-center text-red-500'>Failed to load data. Please check the console.</p>");
             }
+ 
         }
 
         // Initial data load and interval

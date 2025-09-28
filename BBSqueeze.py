@@ -1,5 +1,9 @@
+import os
+import urllib.parse
+import json # New import for JSON handling
 from time import sleep
 from datetime import datetime
+
 from tradingview_screener import Query, col, And, Or
 import pandas as pd
 pd.set_option('display.expand_frame_repr', False)
@@ -11,14 +15,22 @@ import os
 import json
 import numpy as np
 
+
 def append_df_to_csv(df, csv_path):
+    """
+    Appends a DataFrame to a CSV file. Creates the file with a header if it doesn't 
+    exist, otherwise appends without the header.
+    """
     if not os.path.exists(csv_path):
         df.to_csv(csv_path, mode='a', header=True, index=False)
     else:
         df.to_csv(csv_path, mode='a', header=False, index=False)
 
-def generate_heatmap_json(df, output_path='treemap_data.json'):
+# --- Momentum Logic Function ---
+
+def get_momentum_indicator(macd_hist_value):
     """
+
     Generates a simple, flat JSON array of stock data for the D3 heatmap.
     """
     # Ensure required columns exist for JSON generation
@@ -65,6 +77,7 @@ while True:
                     col(f'BB.upper{tf}') < col(f'KltChnl.upper{tf}'),
                     col(f'BB.lower{tf}') > col(f'KltChnl.lower{tf}')
                 )
+
             )
 
         query = Query().select(
@@ -140,3 +153,4 @@ while True:
         print(f"An error occurred: {e}")
 
     sleep(120)
+
