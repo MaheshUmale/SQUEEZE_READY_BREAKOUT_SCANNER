@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Squeeze Heatmap</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body { font-family: sans-serif; }
+        .chart-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 4px;
+            padding: 10px;
+        }
+        .cell {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-align: center;
+            height: 80px;
+            transition: transform 0.2s;
+        }
+        .cell:hover {
+            transform: scale(1.05);
+        }
+        .stock-ticker {
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .stock-rvol {
+            font-size: 12px;
+        }
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            width: auto;
+            height: auto;
+            padding: 8px;
+            font: 12px sans-serif;
+            background: lightsteelblue;
+            border: 0px;
+            border-radius: 8px;
+            pointer-events: none;
+            opacity: 0;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4">
+        <h1 class="text-2xl font-bold text-center mb-4">Stock Squeeze Heatmap</h1>
+        <div id="chart" class="chart-container"></div>
+        <div class="tooltip"></div>
+    </div>
+
+    <script>
+        const chartContainer = d3.select("#chart");
+        const tooltip = d3.select(".tooltip");
+
+        function getMomentumGroup(stock) {
+            // This is a bit of a hack. Since the flat data doesn't retain the parent group name,
+            // we have to rely on the `momentum` property which seems to contain 'G' for green, 'R' for red.
+            // A better data structure would be ideal, but we work with what we have.
+            const momentum = stock.data.momentum.charAt(0);
+            if (momentum === 'G') return "Bullish";
+            if (momentum === 'R' || momentum === 'L') return "Bearish";
+            return "Neutral";
+        }
+
+        async function loadData() {
+            // Append a cache-busting query parameter to ensure fresh data
+            const data = await d3.json(`treemap_data.json?t=${new Date().getTime()}`);
+
+            // The data is hierarchical. We need to flatten it into a list of all stocks (leaves).
+            const root = d3.hierarchy(data).sum(d => d.value);
+            const leaves = root.leaves();
+
+            // Sort leaves by group to cluster them visually
+            leaves.sort((a, b) => {
+                const groupA = getMomentumGroup(a);
+                const groupB = getMomentumGroup(b);
+                if (groupA < groupB) return -1;
+                if (groupA > groupB) return 1;
+                return b.data.value - a.data.value; // Secondary sort by heatmap value
+            });
+
+            // Define color scales. We'll map RVOL (0 to ~5) to a color intensity.
+            const colorScales = {
+                Bullish: d3.scaleLinear().domain([0, 5]).range(["#1a472a", "#48bb78"]), // Dark to light green
+                Bearish: d3.scaleLinear().domain([0, 5]).range(["#7f1d1d", "#f56565"]), // Dark to light red
+                Neutral: d3.scaleLinear().domain([0, 5]).range(["#4a5568", "#a0aec0"])  // Dark to light gray
+            };
+
+            // --- D3 Data Binding ---
+            const cells = chartContainer.selectAll(".cell")
+                .data(leaves, d => d.data.name); // Key function for object constancy
+
+            // Exit selection: Remove cells that are no longer in the data
+            cells.exit().remove();
+
+            // Enter selection: Create new div elements for new stocks
+            const enterCells = cells.enter()
+                .append("div")
+                .attr("class", "cell")
+                .on("click", (event, d) => window.open(d.data.url, "_blank"))
+                .on("mouseover", function(event, d) {
+                    tooltip.transition().duration(200).style("opacity", .9);
+                    tooltip.html(
+                        `<strong>${d.data.name}</strong><br/>` +
+                        `Squeeze Count: ${d.data.count}<br/>` +
+                        `RVOL: ${d.data.rvol.toFixed(2)}<br/>` +
+                        `Heatmap Score: ${d.data.value.toFixed(2)}`
+                    )
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", function(d) {
+                    tooltip.transition().duration(500).style("opacity", 0);
+                });
+
+            // Add child elements for the text within each cell
+            enterCells.append("div").attr("class", "stock-ticker");
+            enterCells.append("div").attr("class", "stock-rvol");
+
+            // Merge enter and update selections to apply updates to all existing cells
+            const updateCells = enterCells.merge(cells);
+
+            // Update styling and text for all cells (both new and existing)
+            updateCells
+                .style("background-color", d => {
+                    const group = getMomentumGroup(d);
+                    // Clamp RVOL to the domain max to prevent invalid colors
+                    const rvol = Math.min(d.data.rvol, 5);
+                    return colorScales[group](rvol);
+                });
+
+            updateCells.select(".stock-ticker").text(d => d.data.name.replace('NSE:', ''));
+            updateCells.select(".stock-rvol").text(d => `RVOL: ${d.data.rvol.toFixed(2)}`);
+        }
+
+        // Initial data load
+        loadData();
+
+        // Set an interval to auto-refresh the data every 2 minutes (120,000 ms)
+        setInterval(loadData, 120000);
+    </script>
+</body>
+</html>
