@@ -4,9 +4,7 @@ import json
 from time import sleep
 from datetime import datetime
 import numpy as np
-
 import sqlite3
-
 from tradingview_screener import Query, col, And, Or
 import pandas as pd
 
@@ -75,9 +73,7 @@ def generate_heatmap_json(df, output_path):
 
 
 # --- Configuration ---
-
 DB_FILE = 'squeeze_history.db'
-
 OUTPUT_JSON_FIRED = 'treemap_data_fired.json'
 OUTPUT_JSON_IN_SQUEEZE = 'treemap_data_in_squeeze.json'
 TIME_INTERVAL_SECONDS = 120
@@ -108,30 +104,38 @@ def get_highest_squeeze_tf(row):
     return 'Unknown'
 
 
-
 def init_db():
     """Initializes the database and creates the table if it doesn't exist."""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
+
+    # Check if the 'timeframe' column exists. If not, recreate the table.
+    # This is a simple migration strategy for development.
+    try:
+        cursor.execute("SELECT timeframe FROM squeeze_history LIMIT 1")
+    except sqlite3.OperationalError:
+        print("Schema outdated. Recreating squeeze_history table.")
+        cursor.execute("DROP TABLE IF EXISTS squeeze_history")
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS squeeze_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             scan_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            ticker TEXT NOT NULL
+            ticker TEXT NOT NULL,
+            timeframe TEXT NOT NULL
         )
     ''')
-    # Create an index for faster lookups on the timestamp
+    # Create an index for faster lookups
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_scan_timestamp ON squeeze_history (scan_timestamp)')
     conn.commit()
     conn.close()
 
 
 def load_previous_squeeze_list_from_db():
-    """Loads the list of tickers from the most recent scan in the database."""
+    """Loads the list of (ticker, timeframe) tuples from the most recent scan."""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
-    # Find the most recent timestamp
     cursor.execute('SELECT MAX(scan_timestamp) FROM squeeze_history')
     last_timestamp = cursor.fetchone()[0]
 
@@ -139,23 +143,25 @@ def load_previous_squeeze_list_from_db():
         conn.close()
         return []
 
-    # Get all tickers for that timestamp
-    cursor.execute('SELECT ticker FROM squeeze_history WHERE scan_timestamp = ?', (last_timestamp,))
-    tickers = [row[0] for row in cursor.fetchall()]
+    cursor.execute('SELECT ticker, timeframe FROM squeeze_history WHERE scan_timestamp = ?', (last_timestamp,))
+    squeeze_pairs = [(row[0], row[1]) for row in cursor.fetchall()]
 
     conn.close()
-    return tickers
+    return squeeze_pairs
 
 
-def save_current_squeeze_list_to_db(tickers):
-    """Saves the current list of squeezed tickers to the database with a new timestamp."""
+def save_current_squeeze_list_to_db(squeeze_pairs):
+    """Saves the current list of (ticker, timeframe) pairs to the database."""
+    if not squeeze_pairs:
+        return # Don't save if there's nothing to save
+
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     now = datetime.now()
 
-    # Use executemany for efficient bulk insertion
-    cursor.executemany('INSERT INTO squeeze_history (scan_timestamp, ticker) VALUES (?, ?)',
-                       [(now, ticker) for ticker in tickers])
+    data_to_insert = [(now, ticker, tf) for ticker, tf in squeeze_pairs]
+    cursor.executemany('INSERT INTO squeeze_history (scan_timestamp, ticker, timeframe) VALUES (?, ?, ?)',
+                       data_to_insert)
 
     conn.commit()
     conn.close()
@@ -165,31 +171,12 @@ def save_current_squeeze_list_to_db(tickers):
 init_db()
 while True:
     try:
-        # 1. Load the list of tickers that were in a squeeze previously
-        prev_squeeze_list = load_previous_squeeze_list_from_db()
-=======
-def load_previous_squeeze_list(filepath):
-    if os.path.exists(filepath):
-        with open(filepath, 'r') as f:
-            return json.load(f)
-    return []
-
-
-def save_current_squeeze_list(data, filepath):
-    with open(filepath, 'w') as f:
-        json.dump(data, f)
-
-
-# --- Main Loop ---
-while True:
-    try:
-        # 1. Load the list of tickers that were in a squeeze previously
-        prev_squeeze_list = load_previous_squeeze_list(PREV_SQUEEZE_FILE)
-
+        # 1. Load the list of (ticker, timeframe) pairs that were in a squeeze previously
+        prev_squeeze_pairs = load_previous_squeeze_list_from_db()
+        print(f"Loaded {len(prev_squeeze_pairs)} (ticker, timeframe) pairs from the previous scan.")
 
         # 2. Find all stocks currently in a squeeze (fetch full data)
         squeeze_conditions = [
-
             And(
                 col(f'BB.upper{tf}') < col(f'KltChnl.upper{tf}'),
                 col(f'BB.lower{tf}') > col(f'KltChnl.lower{tf}')
@@ -197,7 +184,6 @@ while True:
         ]
         query_in_squeeze = Query().select(*select_cols).where2(
             And(
-
                 col('is_primary') == True, col('typespecs').has('common'), col('type') == 'stock',
                 col('exchange') == 'NSE', col('close').between(20, 10000), col('active_symbol') == True,
                 col('average_volume_10d_calc|5') > 50000, col('Value.Traded|5') > 10000000,
@@ -205,20 +191,24 @@ while True:
             )
         ).limit(500).set_markets('india')
 
-
         _, df_in_squeeze = query_in_squeeze.get_scanner_data()
 
-        current_squeeze_list = []
+        current_squeeze_pairs = []
         if df_in_squeeze is not None and not df_in_squeeze.empty:
-            print(f"Found {len(df_in_squeeze)} tickers currently in a squeeze.")
-            current_squeeze_list = df_in_squeeze['ticker'].tolist()
+            print(f"Found {len(df_in_squeeze)} tickers currently in a squeeze across all timeframes.")
+
+            # Create a list of all (ticker, timeframe) pairs currently in a squeeze
+            for _, row in df_in_squeeze.iterrows():
+                for tf_suffix, tf_name in tf_display_map.items():
+                    if (row[f'BB.upper{tf_suffix}'] < row[f'KltChnl.upper{tf_suffix}']) and \
+                       (row[f'BB.lower{tf_suffix}'] > row[f'KltChnl.lower{tf_suffix}']):
+                        current_squeeze_pairs.append((row['ticker'], tf_name))
 
             # --- Process and save "In Squeeze" data ---
             df_in_squeeze['encodedTicker'] = df_in_squeeze['ticker'].apply(urllib.parse.quote)
             df_in_squeeze['URL'] = "https://in.tradingview.com/chart/N8zfIJVK/?symbol=" + df_in_squeeze['encodedTicker']
             df_in_squeeze['logo'] = df_in_squeeze['logoid'].apply(
                 lambda x: f"https://s3-symbol-logo.tradingview.com/{x}.svg" if pd.notna(x) and x.strip() else '')
-
 
             squeeze_count_cols = []
             for tf in timeframes:
@@ -242,8 +232,9 @@ while True:
             generate_heatmap_json(pd.DataFrame(), OUTPUT_JSON_IN_SQUEEZE)
 
         # 3. Identify and process "Squeeze Fired" stocks
-        fired_tickers = [ticker for ticker in prev_squeeze_list if ticker not in current_squeeze_list]
-        print(f"Found {len(fired_tickers)} tickers where squeeze has fired.")
+        fired_pairs = set(prev_squeeze_pairs) - set(current_squeeze_pairs)
+        fired_tickers = list(set(ticker for ticker, tf in fired_pairs))
+        print(f"Found {len(fired_pairs)} (ticker, timeframe) pairs where squeeze has fired.")
 
         if fired_tickers:
             query_fired = Query().select(*select_cols).where2(col('name').is_in(fired_tickers)).set_markets('india')
@@ -275,10 +266,8 @@ while True:
             generate_heatmap_json(pd.DataFrame(), OUTPUT_JSON_FIRED)
 
         # 4. Save the current list of squeezed stocks for the next iteration
-
-        save_current_squeeze_list_to_db(current_squeeze_list)
-
-        print(f"Saved {len(current_squeeze_list)} currently squeezed tickers for the next scan.")
+        save_current_squeeze_list_to_db(current_squeeze_pairs)
+        print(f"Saved {len(current_squeeze_pairs)} (ticker, timeframe) pairs for the next scan.")
 
     except Exception as e:
         print(f"An error occurred: {e}")
