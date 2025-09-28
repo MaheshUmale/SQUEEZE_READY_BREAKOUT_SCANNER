@@ -1,24 +1,21 @@
 import os
 import urllib.parse
-import json # New import for JSON handling
+import json
 from time import sleep
 from datetime import datetime
-
+import numpy as np
+import sqlite3
 from tradingview_screener import Query, col, And, Or
 import pandas as pd
+
 pd.set_option('display.expand_frame_repr', False)
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 0)
 
-import urllib.parse
-import os
-import json
-import numpy as np
-
 
 def append_df_to_csv(df, csv_path):
     """
-    Appends a DataFrame to a CSV file. Creates the file with a header if it doesn't 
+    Appends a DataFrame to a CSV file. Creates the file with a header if it doesn't
     exist, otherwise appends without the header.
     """
     if not os.path.exists(csv_path):
@@ -26,19 +23,34 @@ def append_df_to_csv(df, csv_path):
     else:
         df.to_csv(csv_path, mode='a', header=False, index=False)
 
-# --- Momentum Logic Function ---
 
 def get_momentum_indicator(macd_hist_value):
     """
+    Determines momentum based on the MACD histogram value.
+    """
+    if macd_hist_value > 0:
+        return 'Bullish'
+    elif macd_hist_value < 0:
+        return 'Bearish'
+    else:
+        return 'Neutral'
 
+
+def generate_heatmap_json(df, output_path):
+    """
     Generates a simple, flat JSON array of stock data for the D3 heatmap.
     """
     # Ensure required columns exist for JSON generation
-    required_cols = ['ticker', 'HeatmapScore', 'SqueezeCount', 'rvol', 'URL', 'logo']
-    for col in required_cols:
-        if col not in df.columns:
+    required_cols = ['ticker', 'HeatmapScore', 'SqueezeCount', 'rvol', 'URL', 'logo', 'momentum', 'highest_tf']
+    for c in required_cols:
+        if c not in df.columns:
             # Provide a default value if a column is missing
-            df[col] = 0 if 'Score' in col or 'Count' in col or 'rvol' in col else ''
+            if c == 'momentum':
+                df[c] = 'Neutral'
+            elif c == 'highest_tf':
+                df[c] = 'N/A'
+            else:
+                df[c] = 0 if 'Score' in c or 'Count' in c or 'rvol' in c else ''
 
     # Create a flat list of stock data
     heatmap_data = []
@@ -49,7 +61,9 @@ def get_momentum_indicator(macd_hist_value):
             "count": row['SqueezeCount'],
             "rvol": row['rvol'],
             "url": row['URL'],
-            "logo": row['logo']
+            "logo": row['logo'],
+            "momentum": row['momentum'],
+            "highest_tf": row['highest_tf']
         })
 
     # Write the JSON file
@@ -57,100 +71,189 @@ def get_momentum_indicator(macd_hist_value):
         json.dump(heatmap_data, f, indent=4)
     print(f"✅ Flat JSON successfully generated at '{output_path}'.")
 
-# Timeframes to check for a squeeze
+
+# --- Configuration ---
+DB_FILE = 'squeeze_history.db'
+OUTPUT_JSON_FIRED = 'treemap_data_fired.json'
+OUTPUT_JSON_IN_SQUEEZE = 'treemap_data_in_squeeze.json'
+TIME_INTERVAL_SECONDS = 120
+
+# --- Timeframe Configuration ---
 timeframes = ['', '|1', '|5', '|15', '|30', '|60', '|120', '|240', '|1W', '|1M']
+tf_order_map = {
+    '|1M': 10, '|1W': 9, '|240': 8, '|120': 7, '|60': 6,
+    '|30': 5, '|15': 4, '|5': 3, '|1': 2, '': 1
+}
+tf_display_map = {
+    '': 'Daily', '|1': '1m', '|5': '5m', '|15': '15m', '|30': '30m',
+    '|60': '1H', '|120': '2H', '|240': '4H', '|1W': 'Weekly', '|1M': 'Monthly'
+}
 
 # Construct select columns for all timeframes
 select_cols = [
-    'name', 'logoid', 'close', 'volume|5', 'Value.Traded|5', 'average_volume_10d_calc|5'
+    'name', 'logoid', 'close', 'volume|5', 'Value.Traded|5', 'average_volume_10d_calc|5', 'MACD.hist'
 ]
 for tf in timeframes:
     select_cols.extend([f'KltChnl.lower{tf}', f'KltChnl.upper{tf}', f'BB.lower{tf}', f'BB.upper{tf}'])
 
+
+def get_highest_squeeze_tf(row):
+    for tf_suffix in sorted(tf_order_map, key=tf_order_map.get, reverse=True):
+        if row.get(f'InSqueeze{tf_suffix}', False):
+            return tf_display_map[tf_suffix]
+    return 'Unknown'
+
+
+def init_db():
+    """Initializes the database and creates the table if it doesn't exist."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS squeeze_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            scan_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            ticker TEXT NOT NULL
+        )
+    ''')
+    # Create an index for faster lookups on the timestamp
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_scan_timestamp ON squeeze_history (scan_timestamp)')
+    conn.commit()
+    conn.close()
+
+
+def load_previous_squeeze_list_from_db():
+    """Loads the list of tickers from the most recent scan in the database."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+
+    # Find the most recent timestamp
+    cursor.execute('SELECT MAX(scan_timestamp) FROM squeeze_history')
+    last_timestamp = cursor.fetchone()[0]
+
+    if last_timestamp is None:
+        conn.close()
+        return []
+
+    # Get all tickers for that timestamp
+    cursor.execute('SELECT ticker FROM squeeze_history WHERE scan_timestamp = ?', (last_timestamp,))
+    tickers = [row[0] for row in cursor.fetchall()]
+
+    conn.close()
+    return tickers
+
+
+def save_current_squeeze_list_to_db(tickers):
+    """Saves the current list of squeezed tickers to the database with a new timestamp."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    now = datetime.now()
+
+    # Use executemany for efficient bulk insertion
+    cursor.executemany('INSERT INTO squeeze_history (scan_timestamp, ticker) VALUES (?, ?)',
+                       [(now, ticker) for ticker in tickers])
+
+    conn.commit()
+    conn.close()
+
+
+# --- Main Loop ---
+init_db()
 while True:
     try:
-        # Construct the 'where' condition for current squeezes
-        squeeze_conditions = []
-        for tf in timeframes:
-            squeeze_conditions.append(
-                And(
-                    col(f'BB.upper{tf}') < col(f'KltChnl.upper{tf}'),
-                    col(f'BB.lower{tf}') > col(f'KltChnl.lower{tf}')
-                )
+        # 1. Load the list of tickers that were in a squeeze previously
+        prev_squeeze_list = load_previous_squeeze_list_from_db()
+        print(f"Loaded {len(prev_squeeze_list)} tickers from the previous scan.")
 
-            )
-
-        query = Query().select(
-            *select_cols
-        ).where2(
+        # 2. Find all stocks currently in a squeeze (fetch full data)
+        squeeze_conditions = [
             And(
-                col('is_primary') == True,
-                col('typespecs').has('common'),
-                col('type') == 'stock',
-                col('exchange') == 'NSE',
-                col('close').between(20, 10000),
-                col('active_symbol') == True,
-                col('average_volume_10d_calc|5') > 50000,
-                col('Value.Traded|5') > 10000000,
-                Or(*squeeze_conditions) # Filter for stocks currently in a squeeze on any timeframe
+                col(f'BB.upper{tf}') < col(f'KltChnl.upper{tf}'),
+                col(f'BB.lower{tf}') > col(f'KltChnl.lower{tf}')
+            ) for tf in timeframes
+        ]
+        query_in_squeeze = Query().select(*select_cols).where2(
+            And(
+                col('is_primary') == True, col('typespecs').has('common'), col('type') == 'stock',
+                col('exchange') == 'NSE', col('close').between(20, 10000), col('active_symbol') == True,
+                col('average_volume_10d_calc|5') > 50000, col('Value.Traded|5') > 10000000,
+                Or(*squeeze_conditions)
             )
-        ).order_by(
-            'volume|5', ascending=False
-        ).limit(200).set_markets('india')
+        ).limit(500).set_markets('india')
 
-        # Execute the query
-        _, dfNew = query.get_scanner_data()
+        _, df_in_squeeze = query_in_squeeze.get_scanner_data()
 
-        if dfNew is not None and not dfNew.empty:
-            current_time = datetime.now().strftime('%H:%M:%S')
-            current_DATE = datetime.now().strftime('%d_%m_%y')
+        current_squeeze_list = []
+        if df_in_squeeze is not None and not df_in_squeeze.empty:
+            print(f"Found {len(df_in_squeeze)} tickers currently in a squeeze.")
+            current_squeeze_list = df_in_squeeze['ticker'].tolist()
 
-            # --- Post-processing ---
+            # --- Process and save "In Squeeze" data ---
+            df_in_squeeze['encodedTicker'] = df_in_squeeze['ticker'].apply(urllib.parse.quote)
+            df_in_squeeze['URL'] = "https://in.tradingview.com/chart/N8zfIJVK/?symbol=" + df_in_squeeze['encodedTicker']
+            df_in_squeeze['logo'] = df_in_squeeze['logoid'].apply(
+                lambda x: f"https://s3-symbol-logo.tradingview.com/{x}.svg" if pd.notna(x) and x.strip() else '')
 
-            # Add URL
-            dfNew['encodedTicker'] = dfNew['ticker'].apply(urllib.parse.quote)
-            dfNew['URL'] = "https://in.tradingview.com/chart/N8zfIJVK/?symbol=" + dfNew['encodedTicker']
-            dfNew.insert(0, 'current_timestamp', current_time)
-
-            # Add logo URL
-            if 'logoid' in dfNew.columns:
-                dfNew['logo'] = dfNew['logoid'].apply(lambda x: f"https://s3-symbol-logo.tradingview.com/{x}.svg" if pd.notna(x) and x.strip() else '')
-            else:
-                dfNew['logo'] = ''
-
-            # Calculate how many timeframes the stock is in a squeeze
             squeeze_count_cols = []
             for tf in timeframes:
                 col_name = f'InSqueeze{tf}'
-                dfNew[col_name] = (dfNew[f'BB.upper{tf}'] < dfNew[f'KltChnl.upper{tf}']) & \
-                                  (dfNew[f'BB.lower{tf}'] > dfNew[f'KltChnl.lower{tf}'])
+                df_in_squeeze[col_name] = (df_in_squeeze[f'BB.upper{tf}'] < df_in_squeeze[f'KltChnl.upper{tf}']) & \
+                                          (df_in_squeeze[f'BB.lower{tf}'] > df_in_squeeze[f'KltChnl.lower{tf}'])
                 squeeze_count_cols.append(col_name)
+            df_in_squeeze['SqueezeCount'] = df_in_squeeze[squeeze_count_cols].sum(axis=1)
+            df_in_squeeze['highest_tf'] = df_in_squeeze.apply(get_highest_squeeze_tf, axis=1)
 
-            dfNew['SqueezeCount'] = dfNew[squeeze_count_cols].sum(axis=1)
+            avg_vol = df_in_squeeze['average_volume_10d_calc|5'].replace(0, np.nan)
+            df_in_squeeze['rvol'] = (df_in_squeeze['volume|5'] / avg_vol).fillna(0)
+            df_in_squeeze['momentum'] = df_in_squeeze['MACD.hist'].apply(get_momentum_indicator)
 
-            # Calculate RVOL
-            if 'average_volume_10d_calc|5' in dfNew.columns and 'volume|5' in dfNew.columns:
-                avg_vol = dfNew['average_volume_10d_calc|5'].replace(0, np.nan)
-                dfNew['rvol'] = dfNew['volume|5'] / avg_vol
-                dfNew['rvol'] = dfNew['rvol'].fillna(0)
+            momentum_map = {'Bullish': 1, 'Neutral': 0.5, 'Bearish': -1}
+            df_in_squeeze['HeatmapScore'] = (df_in_squeeze['rvol'] + 1) * df_in_squeeze['SqueezeCount'] * df_in_squeeze['momentum'].map(momentum_map)
+
+            generate_heatmap_json(df_in_squeeze, OUTPUT_JSON_IN_SQUEEZE)
+        else:
+            print("No tickers found currently in a squeeze.")
+            generate_heatmap_json(pd.DataFrame(), OUTPUT_JSON_IN_SQUEEZE)
+
+        # 3. Identify and process "Squeeze Fired" stocks
+        fired_tickers = [ticker for ticker in prev_squeeze_list if ticker not in current_squeeze_list]
+        print(f"Found {len(fired_tickers)} tickers where squeeze has fired.")
+
+        if fired_tickers:
+            query_fired = Query().select(*select_cols).where2(col('name').is_in(fired_tickers)).set_markets('india')
+            _, df_fired = query_fired.get_scanner_data()
+
+            if df_fired is not None and not df_fired.empty:
+                current_DATE = datetime.now().strftime('%d_%m_%y')
+                df_fired['encodedTicker'] = df_fired['ticker'].apply(urllib.parse.quote)
+                df_fired['URL'] = "https://in.tradingview.com/chart/N8zfIJVK/?symbol=" + df_fired['encodedTicker']
+                df_fired['logo'] = df_fired['logoid'].apply(
+                    lambda x: f"https://s3-symbol-logo.tradingview.com/{x}.svg" if pd.notna(x) and x.strip() else '')
+
+                df_fired['SqueezeCount'] = 1
+                avg_vol = df_fired['average_volume_10d_calc|5'].replace(0, np.nan)
+                df_fired['rvol'] = (df_fired['volume|5'] / avg_vol).fillna(0)
+                df_fired['momentum'] = df_fired['MACD.hist'].apply(get_momentum_indicator)
+
+                momentum_map = {'Bullish': 1, 'Neutral': 0.5, 'Bearish': -1}
+                df_fired['HeatmapScore'] = (df_fired['rvol'] + 1) * df_fired['SqueezeCount'] * df_fired['momentum'].map(momentum_map)
+
+                generate_heatmap_json(df_fired, OUTPUT_JSON_FIRED)
+                append_df_to_csv(df_fired, 'BBSCAN_FIRED_' + str(current_DATE) + '.csv')
+                print("--- Fired Squeeze Results ---")
+                print(df_fired[['ticker', 'momentum', 'SqueezeCount', 'rvol', 'HeatmapScore']])
             else:
-                dfNew['rvol'] = 0
+                generate_heatmap_json(pd.DataFrame(), OUTPUT_JSON_FIRED)
+        else:
+            print("No squeezes fired in this interval.")
+            generate_heatmap_json(pd.DataFrame(), OUTPUT_JSON_FIRED)
 
-            # Calculate Heatmap Score
-            dfNew['HeatmapScore'] = (dfNew['rvol'] + 1) * dfNew['SqueezeCount']
-
-            # Generate the JSON for the heatmap
-            generate_heatmap_json(dfNew)
-
-            # Save detailed report
-            append_df_to_csv(dfNew, 'BBSCAN_IN_SQUEEZE_'+str(current_DATE)+'.csv')
-
-            print(f"=="*30)
-            print("--- Squeeze Results ---")
-            print(dfNew[['ticker', 'SqueezeCount', 'rvol', 'HeatmapScore', 'logo']])
+        # 4. Save the current list of squeezed stocks for the next iteration
+        save_current_squeeze_list_to_db(current_squeeze_list)
+        print(f"Saved {len(current_squeeze_list)} currently squeezed tickers for the next scan.")
 
     except Exception as e:
         print(f"An error occurred: {e}")
 
-    sleep(120)
+    print(f"\n--- Waiting for {TIME_INTERVAL_SECONDS} seconds until the next scan ---\n")
+    sleep(TIME_INTERVAL_SECONDS)
 
