@@ -3,30 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Squeeze Heatmap</title>
+    <title>Compact Squeeze Heatmap</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         body { font-family: sans-serif; background-color: #111827; color: white; }
-        .section-title {
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 2px solid #4b5563;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            user-select: none;
-        }
-        .section-title .arrow {
-            margin-right: 12px;
-            transition: transform 0.2s;
-            font-size: 1rem;
-        }
-        .section-title.collapsed .arrow {
-            transform: rotate(-90deg);
-        }
         .grid-container {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
@@ -117,121 +98,69 @@
             return neutralColor(d.rvol);
         }
 
-        function getTooltipHtml(d, type) {
-            const momentumHtml = `Momentum: <span style="color: ${getCellColor(d)};">${d.momentum}</span><br/>`;
-            const squeezeHtml = type === 'in_squeeze' ? `Squeeze on ${d.count} TFs (${d.highest_tf})<br/>` : '';
-            return `<strong>${d.name.replace('NSE:', '')}</strong><br/>` + squeezeHtml + momentumHtml + `RVOL: ${d.rvol.toFixed(2)}`;
+        function getTooltipHtml(d) {
+            return `<strong>${d.name.replace('NSE:', '')}</strong><br/>` +
+                   `Squeeze on ${d.count} TFs (${d.highest_tf})<br/>` +
+                   `Momentum: <span style="color: ${getCellColor(d)};">${d.momentum}</span><br/>` +
+                   `RVOL: ${d.rvol.toFixed(2)}`;
         }
 
-        function renderCells(selection, type) {
-            const enterCells = selection.enter().append("div").attr("class", "cell")
-                .on("click", (event, d) => window.open(d.url, "_blank"))
-                .on("mouseover", function(event, d) {
-                    tooltip.transition().duration(200).style("opacity", .9);
-                    tooltip.html(getTooltipHtml(d, type)).style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 28) + "px");
-                })
-                .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
+        function renderHeatmap(data) {
+            heatmapContainer.html(''); // Clear previous content
 
-            if (type === 'in_squeeze') {
-                enterCells.append("div").attr("class", "squeeze-badge").text(d => d.count);
+            if (data.length === 0) {
+                heatmapContainer.html("<p class='text-center text-red-500'>No stocks are currently in a squeeze.</p>");
+                return;
             }
-            enterCells.append("img").attr("class", "stock-logo");
-            enterCells.append("div").attr("class", "stock-ticker");
-            enterCells.append("div").attr("class", "stock-info");
 
-            const updateCells = enterCells.merge(selection);
-            updateCells.style("background-color", d => getCellColor(d));
-            updateCells.select(".stock-logo").attr("src", d => d.logo).style("display", d => d.logo ? 'block' : 'none');
-            updateCells.select(".stock-ticker").text(d => d.name.replace('NSE:', ''));
-            updateCells.select(".stock-info").text(d => `RVOL: ${d.rvol.toFixed(2)}`);
-        }
-
-        function renderFired(data) {
-            firedContainer.html(data.length === 0 ? "<p class='text-gray-400'>No squeezes have fired recently.</p>" : "");
-            const cells = firedContainer.selectAll(".cell").data(data, d => d.name);
-            cells.exit().remove();
-            renderCells(cells, 'fired');
-        }
-
-        function renderInSqueeze(data) {
-            inSqueezeContainer.html(data.length === 0 ? "<p class='text-gray-400'>No stocks are currently in a squeeze.</p>" : "");
             const tfOrder = ['Monthly', 'Weekly', '4H', '2H', '1H', '30m', '15m', '5m', '1m', 'Daily', 'Unknown'];
             const groupedData = d3.group(data, d => d.highest_tf);
             const sortedGroups = Array.from(groupedData.entries()).sort((a, b) => tfOrder.indexOf(a[0]) - tfOrder.indexOf(b[0]));
 
-            const groups = inSqueezeContainer.selectAll('.timeframe-group').data(sortedGroups, d => d[0]);
-            groups.exit().remove();
+            sortedGroups.forEach(([tf, stocks]) => {
+                const group = heatmapContainer.append('div').attr('class', 'timeframe-group');
+                group.append('h2').attr('class', 'timeframe-title').text(tf);
+                const grid = group.append('div').attr('class', 'grid-container');
 
-            const enterGroups = groups.enter().append('div').attr('class', 'timeframe-group');
+                // Sort stocks by SqueezeCount (descending)
+                stocks.sort((a, b) => b.count - a.count);
 
-            const title = enterGroups.append('h2').attr('class', 'timeframe-title');
-            title.append('span').attr('class', 'arrow').html('&#9662;'); // Down arrow
-            title.append('span').attr('class', 'title-text');
+                const cells = grid.selectAll('.cell').data(stocks, d => d.name);
+                cells.exit().remove();
 
-            const momentumCols = enterGroups.append('div').attr('class', 'momentum-columns');
-            momentumCols.append('div').attr('class', 'bullish-col').html("<div class='grid-container'></div>");
-            momentumCols.append('div').attr('class', 'bearish-col').html("<div class='grid-container'></div>");
+                const enterCells = cells.enter().append("div").attr("class", "cell")
+                    .on("click", (event, d) => window.open(d.url, "_blank"))
+                    .on("mouseover", function(event, d) {
+                        tooltip.transition().duration(200).style("opacity", .9);
+                        tooltip.html(getTooltipHtml(d)).style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 28) + "px");
+                    })
+                    .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
 
-            const updateGroups = enterGroups.merge(groups);
-            updateGroups.select('.timeframe-title .title-text').text(d => d[0]);
+                enterCells.append("div").attr("class", "squeeze-badge").text(d => d.count);
+                enterCells.append("img").attr("class", "stock-logo");
+                enterCells.append("div").attr("class", "stock-ticker");
 
-            updateGroups.select('.timeframe-title').on('click', function() {
-                const group = d3.select(this.parentNode);
-                const momentumColumns = group.select('.momentum-columns');
-                const isCollapsed = momentumColumns.style('display') === 'none';
-
-                momentumColumns.style('display', isCollapsed ? 'grid' : 'none');
-                group.select('.timeframe-title').classed('collapsed', !isCollapsed);
-            });
-
-            updateGroups.each(function([tf, stocks]) {
-                const bullishStocks = stocks.filter(s => s.momentum === 'Bullish').sort((a,b) => b.value - a.value);
-                const bearishStocks = stocks.filter(s => s.momentum === 'Bearish').sort((a,b) => b.value - a.value);
-
-                const bullishColEl = d3.select(this).select('.bullish-col');
-                const bearishColEl = d3.select(this).select('.bearish-col');
-
-                bullishColEl.style('display', bullishStocks.length > 0 ? null : 'none');
-                bearishColEl.style('display', bearishStocks.length > 0 ? null : 'none');
-
-                const bullishCells = bullishColEl.select('.grid-container').selectAll('.cell').data(bullishStocks, d => d.name);
-                bullishCells.exit().remove();
-                renderCells(bullishCells, 'in_squeeze');
-
-                const bearishCells = bearishColEl.select('.grid-container').selectAll('.cell').data(bearishStocks, d => d.name);
-                bearishCells.exit().remove();
-                renderCells(bearishCells, 'in_squeeze');
+                const updateCells = enterCells.merge(cells);
+                updateCells.style("background-color", d => getCellColor(d));
+                updateCells.select(".stock-logo").attr("src", d => d.logo).style("display", d => d.logo ? 'block' : 'none');
+                updateCells.select(".stock-ticker").text(d => d.name.replace('NSE:', ''));
             });
         }
 
         async function loadData() {
             try {
-                const [firedData, inSqueezeData] = await Promise.all([
-                    d3.json(`treemap_data_fired.json?t=${new Date().getTime()}`),
-                    d3.json(`treemap_data_in_squeeze.json?t=${new Date().getTime()}`)
-                ]);
-                renderFired(firedData.sort((a, b) => b.value - a.value));
-                renderInSqueeze(inSqueezeData);
+                const inSqueezeData = await d3.json(`treemap_data_in_squeeze.json?t=${new Date().getTime()}`);
+                renderHeatmap(inSqueezeData);
             } catch (error) {
                 console.error("Failed to load data:", error);
-                firedContainer.html("<p class='text-center text-red-500'>Could not load 'Fired' data.</p>");
-                inSqueezeContainer.html("<p class='text-center text-red-500'>Could not load 'In Squeeze' data.</p>");
+                heatmapContainer.html("<p class='text-center text-red-500'>Could not load 'In Squeeze' data.</p>");
             }
-        }
-
-        function setupCollapsibleSections() {
-            d3.selectAll('.section-title').on('click', function() {
-                const container = d3.select(this.parentNode).select('.grid-container, #in-squeeze-container');
-                const isCollapsed = container.style('display') === 'none';
-                container.style('display', isCollapsed ? null : 'none');
-                d3.select(this).classed('collapsed', !isCollapsed);
-            });
         }
 
         // Initial data load and interval
         loadData();
-        setupCollapsibleSections();
         refreshInterval = setInterval(loadData, 120000);
+
     </script>
 </body>
 </html>
