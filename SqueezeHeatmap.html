@@ -8,33 +8,38 @@
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         body { font-family: sans-serif; background-color: #111827; color: white; }
-        .chart-container {
+        .timeframe-group {
+            margin-bottom: 24px;
+        }
+        .timeframe-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            padding-bottom: 4px;
+            border-bottom: 2px solid #374151;
+        }
+        .grid-container {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
             gap: 8px;
-            padding: 16px;
         }
         .cell {
             display: flex;
             flex-direction: column;
-
             justify-content: space-between;
- 
             align-items: center;
             padding: 10px;
             border-radius: 6px;
             cursor: pointer;
             text-align: center;
-
             height: 110px;
             transition: transform 0.2s, background-color 0.2s;
             border: 1px solid #374151;
-
         }
         .stock-logo {
-            width: 32px; /* Set a fixed width */
-            height: 32px; /* Set a fixed height */
-            margin-bottom: 5px; /* Space between logo and ticker */
+            width: 32px;
+            height: 32px;
+            margin-bottom: 5px;
         }
         .cell:hover {
             transform: scale(1.05);
@@ -77,7 +82,7 @@
             <button id="btn-in-squeeze" class="px-4 py-2 rounded-md text-sm font-medium transition">In Squeeze</button>
         </div>
         <p id="description" class="text-center text-gray-400 mb-6"></p>
-        <div id="chart" class="chart-container"></div>
+        <div id="chart"></div>
         <div class="tooltip"></div>
     </div>
 
@@ -96,28 +101,52 @@
         const bullishColor = d3.scaleLinear().domain(rvolDomain).range(["#064e3b", "#10b981"]).clamp(true);
         const bearishColor = d3.scaleLinear().domain(rvolDomain).range(["#7f1d1d", "#ef4444"]).clamp(true);
         const neutralColor = d3.scaleLinear().domain(rvolDomain).range(["#374151", "#6b7280"]).clamp(true);
-        const inSqueezeColor = d3.scaleLinear().domain(rvolDomain).range(["#166534", "#22c55e"]).clamp(true);
 
         function getCellColor(d) {
-            if (currentMode === 'fired') {
-                if (d.momentum === 'Bullish') return bullishColor(d.rvol);
-                if (d.momentum === 'Bearish') return bearishColor(d.rvol);
-                return neutralColor(d.rvol);
-            }
-            return inSqueezeColor(d.rvol);
+            if (d.momentum === 'Bullish') return bullishColor(d.rvol);
+            if (d.momentum === 'Bearish') return bearishColor(d.rvol);
+            return neutralColor(d.rvol);
         }
 
         function getTooltipHtml(d) {
-            if (currentMode === 'fired') {
-                return `<strong>${d.name.replace('NSE:', '')}</strong><br/>` +
-                       `Momentum: <span style="color: ${getCellColor(d)};">${d.momentum}</span><br/>` +
-                       `RVOL: ${d.rvol.toFixed(2)}<br/>` +
-                       `Score: ${d.value.toFixed(2)}`;
-            }
+            const momentumHtml = `Momentum: <span style="color: ${getCellColor(d)};">${d.momentum}</span><br/>`;
+            const squeezeHtml = currentMode === 'in_squeeze' ? `Squeeze on ${d.count} timeframes (${d.highest_tf})<br/>` : '';
+
             return `<strong>${d.name.replace('NSE:', '')}</strong><br/>` +
-                   `Squeeze on ${d.count} timeframes<br/>` +
+                   squeezeHtml +
+                   momentumHtml +
                    `RVOL: ${d.rvol.toFixed(2)}<br/>` +
                    `Score: ${d.value.toFixed(2)}`;
+        }
+
+        function renderCells(selection) {
+             // Enter selection
+            const enterCells = selection.enter()
+                .append("div")
+                .attr("class", "cell")
+                .on("click", (event, d) => window.open(d.url, "_blank"))
+                .on("mouseover", function(event, d) {
+                    tooltip.transition().duration(200).style("opacity", .9);
+                    tooltip.html(getTooltipHtml(d))
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", function(d) {
+                    tooltip.transition().duration(500).style("opacity", 0);
+                });
+
+            enterCells.append("img").attr("class", "stock-logo");
+            enterCells.append("div").attr("class", "stock-ticker");
+            enterCells.append("div").attr("class", "stock-info");
+
+            // Merge enter and update selections
+            const updateCells = enterCells.merge(selection);
+
+            // Update all cells
+            updateCells.style("background-color", d => getCellColor(d));
+            updateCells.select(".stock-logo").attr("src", d => d.logo).style("display", d => d.logo ? 'block' : 'none');
+            updateCells.select(".stock-ticker").text(d => d.name.replace('NSE:', ''));
+            updateCells.select(".stock-info").text(d => `RVOL: ${d.rvol.toFixed(2)}`);
         }
 
         async function loadData() {
@@ -126,36 +155,28 @@
                 const data = await d3.json(`${filename}?t=${new Date().getTime()}`);
                 data.sort((a, b) => b.value - a.value);
 
-                // --- D3 Data Binding ---
-                const cells = chartContainer.selectAll(".cell")
-                    .data(data, d => d.name);
+                chartContainer.html(''); // Clear previous content
 
-                cells.exit().remove();
+                if (currentMode === 'in_squeeze') {
+                    const tfOrder = ['Monthly', 'Weekly', '4H', '2H', '1H', '30m', '15m', '5m', '1m', 'Daily', 'Unknown'];
+                    const groupedData = d3.group(data, d => d.highest_tf);
+                    const sortedGroups = Array.from(groupedData.entries()).sort((a, b) => tfOrder.indexOf(a[0]) - tfOrder.indexOf(b[0]));
 
-                const enterCells = cells.enter()
-                    .append("div")
-                    .attr("class", "cell")
-                    .on("click", (event, d) => window.open(d.url, "_blank"))
-                    .on("mouseover", function(event, d) {
-                        tooltip.transition().duration(200).style("opacity", .9);
-                        tooltip.html(getTooltipHtml(d))
-                            .style("left", (event.pageX + 10) + "px")
-                            .style("top", (event.pageY - 28) + "px");
-                    })
-                    .on("mouseout", function(d) {
-                        tooltip.transition().duration(500).style("opacity", 0);
+                    sortedGroups.forEach(([tf, stocks]) => {
+                        const group = chartContainer.append('div').attr('class', 'timeframe-group');
+                        group.append('h2').attr('class', 'timeframe-title').text(tf);
+                        const grid = group.append('div').attr('class', 'grid-container');
+                        const cells = grid.selectAll('.cell').data(stocks, d => d.name);
+                        cells.exit().remove();
+                        renderCells(cells);
                     });
 
-                enterCells.append("img").attr("class", "stock-logo");
-                enterCells.append("div").attr("class", "stock-ticker");
-                enterCells.append("div").attr("class", "stock-info");
-
-                const updateCells = enterCells.merge(cells);
-
-                updateCells.style("background-color", d => getCellColor(d));
-                updateCells.select(".stock-logo").attr("src", d => d.logo).style("display", d => d.logo ? 'block' : 'none');
-                updateCells.select(".stock-ticker").text(d => d.name.replace('NSE:', ''));
-                updateCells.select(".stock-info").text(d => `RVOL: ${d.rvol.toFixed(2)}`);
+                } else { // Fired mode
+                    chartContainer.attr('class', 'grid-container');
+                    const cells = chartContainer.selectAll('.cell').data(data, d => d.name);
+                    cells.exit().remove();
+                    renderCells(cells);
+                }
 
             } catch (error) {
                 console.error(`Failed to load data from ${filename}:`, error);
@@ -177,7 +198,7 @@
                 btnInSqueeze.classList.remove('bg-gray-700', 'text-gray-300');
                 btnFired.classList.add('bg-gray-700', 'text-gray-300');
                 btnFired.classList.remove('bg-blue-600', 'text-white');
-                description.innerText = 'Heatmap of stocks that are currently in a state of low volatility.';
+                description.innerText = 'Heatmap of stocks that are currently in a state of low volatility, grouped by the highest timeframe in a squeeze.';
             }
             loadData();
         }
