@@ -28,17 +28,22 @@
             font-weight: 600;
             margin-bottom: 0.75rem;
             color: #9ca3af;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            user-select: none;
+        }
+        .timeframe-title .arrow {
+            margin-right: 8px;
+            transition: transform 0.2s;
+        }
+        .timeframe-title.collapsed .arrow {
+            transform: rotate(-90deg);
         }
         .momentum-columns {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 1.5rem;
-        }
-        .momentum-column h3 {
-            font-size: 1rem;
-            font-weight: 600;
-            text-align: center;
-            margin-bottom: 0.5rem;
         }
         .cell {
             position: relative;
@@ -46,11 +51,11 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            padding: 8px;
-            border-radius: 6px;
+            padding: 4px;
+            border-radius: 4px;
             cursor: pointer;
             text-align: center;
-            height: 90px;
+            height: 75px;
             transition: transform 0.2s, background-color 0.2s;
             border: 1px solid #374151;
         }
@@ -59,16 +64,16 @@
             border-color: #9ca3af;
         }
         .stock-logo {
-            width: 28px;
-            height: 28px;
-            margin-bottom: 4px;
+            width: 24px;
+            height: 24px;
+            margin-bottom: 3px;
         }
         .stock-ticker {
             font-weight: 600;
-            font-size: 12px;
+            font-size: 11px;
         }
         .stock-info {
-            font-size: 10px;
+            font-size: 9px;
             color: #d1d5db;
         }
         .squeeze-badge {
@@ -179,13 +184,26 @@
             groups.exit().remove();
 
             const enterGroups = groups.enter().append('div').attr('class', 'timeframe-group');
-            enterGroups.append('h2').attr('class', 'timeframe-title');
+
+            const title = enterGroups.append('h2').attr('class', 'timeframe-title');
+            title.append('span').attr('class', 'arrow').html('&#9662;'); // Down arrow
+            title.append('span').attr('class', 'title-text');
+
             const momentumCols = enterGroups.append('div').attr('class', 'momentum-columns');
-            momentumCols.append('div').attr('class', 'bullish-col').html("<h3 class='text-green-400'>Bullish</h3><div class='grid-container'></div>");
-            momentumCols.append('div').attr('class', 'bearish-col').html("<h3 class='text-red-400'>Bearish</h3><div class='grid-container'></div>");
+            momentumCols.append('div').attr('class', 'bullish-col').html("<div class='grid-container'></div>");
+            momentumCols.append('div').attr('class', 'bearish-col').html("<div class='grid-container'></div>");
 
             const updateGroups = enterGroups.merge(groups);
-            updateGroups.select('.timeframe-title').text(d => d[0]);
+            updateGroups.select('.timeframe-title .title-text').text(d => d[0]);
+
+            updateGroups.select('.timeframe-title').on('click', function() {
+                const group = d3.select(this.parentNode);
+                const momentumColumns = group.select('.momentum-columns');
+                const isCollapsed = momentumColumns.style('display') === 'none';
+
+                momentumColumns.style('display', isCollapsed ? 'grid' : 'none');
+                group.select('.timeframe-title').classed('collapsed', !isCollapsed);
+            });
 
             updateGroups.each(function([tf, stocks]) {
                 const bullishStocks = stocks.filter(s => s.momentum === 'Bullish').sort((a,b) => b.value - a.value);
