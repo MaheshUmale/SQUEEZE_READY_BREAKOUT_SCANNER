@@ -1,19 +1,36 @@
-# Real-Time Stock Squeeze "Fired" Scanner & Heatmap
+# Real-Time Multi-Timeframe Squeeze Scanner & Dashboard
 
-This project provides a real-time scanner that identifies stocks where a TTM Squeeze has recently "fired" (i.e., the stock has transitioned from a state of low volatility to high volatility). The results are visualized as an interactive heatmap in your web browser, which updates automatically.
+This project provides a powerful, real-time scanner that identifies stocks in a TTM Squeeze across multiple timeframes. It's designed to help traders spot potential volatility breakouts by tracking when squeezes form and when they fire with increased volatility.
 
-## Core Components
+The results are visualized through a responsive, multi-page web dashboard that updates automatically.
 
--   **`BBSqueeze.py`**: The Python backend script that continuously scans the market using the `tradingview_screener` library. It detects when a squeeze has fired across multiple timeframes, determines the breakout momentum (Bullish or Bearish), and generates a `treemap_data.json` file with the results.
--   **`SqueezeHeatmap.html`**: A single-page web application that visualizes the data from `treemap_data.json`. It uses D3.js to create an interactive heatmap where stocks are grouped by momentum and colored by relative volume (RVOL).
--   **`requirements.txt`**: Lists the necessary Python dependencies.
+## Key Features
+
+-   **Multi-Timeframe Scanning**: Monitors stocks for squeezes on timeframes from 1 minute to 1 month.
+-   **In-Squeeze Heatmap**: A comprehensive heatmap view of all stocks currently in a squeeze, grouped by the highest timeframe.
+-   **Newly Formed Squeezes**: A dedicated real-time list of squeezes that have just formed in the latest scan, allowing you to catch them early.
+-   **Intelligent Fired Squeezes**: A real-time list of squeezes that have not just fired, but have done so with a verifiable *increase in volatility*, indicating a more significant breakout.
+-   **Responsive Dashboard**: The user interface is designed to work seamlessly on both desktop and mobile devices.
+-   **Detailed Information**: Tooltips and list views provide key data points like momentum, relative volume (RVOL), and volatility changes.
+
+## The Dashboard Views
+
+The application is split into several focused pages:
+
+1.  **Main Heatmap**: The primary dashboard showing all stocks currently in a squeeze, organized by timeframe and momentum (Bullish/Bearish).
+2.  **Compact View**: A more condensed version of the heatmap for a high-level overview.
+3.  **Newly Formed**: A real-time list showing only the squeezes that have been identified in the most recent scan cycle.
+4.  **Recently Fired**: A real-time list showing only the squeezes that have fired *and* have confirmed an increase in volatility since the squeeze began.
 
 ## How It Works
 
-1.  The `BBSqueeze.py` script runs in a loop, scanning for stocks that were in a squeeze on the previous candle but are no longer in a squeeze on the current candle.
-2.  For each "fired" squeeze, it calculates the breakout momentum, relative volume (RVOL), and a "Heatmap Score".
-3.  The script then writes this data to a `treemap_data.json` file.
-4.  The `SqueezeHeatmap.html` page fetches this JSON file every two minutes and updates the heatmap visualization.
+1.  The **`BBSqueeze.py`** script runs continuously in the background.
+2.  It uses the `tradingview_screener` library to scan for stocks that meet the squeeze criteria (Bollinger Bands inside Keltner Channels).
+3.  It maintains a history of squeezes in a local SQLite database (`squeeze_history.db`).
+4.  In each cycle, it compares the current list of squeezes with the previous one to identify **newly formed** and **recently fired** squeezes.
+5.  For fired squeezes, it calculates the change in volatility to ensure it's a meaningful event.
+6.  The script generates three JSON files (`treemap_data_in_squeeze.json`, `treemap_data_formed.json`, `treemap_data_fired.json`) with the latest data.
+7.  The HTML pages (`SqueezeHeatmap.html`, `Formed.html`, `Fired.html`) fetch this data and update the visualizations in real-time.
 
 ## Setup and Usage
 
@@ -25,19 +42,19 @@ First, ensure you have Python 3 installed. Then, install the required packages u
 pip install -r requirements.txt
 ```
 
-### 2. Run the Scanner
+### 2. Run the Scanner Backend
 
-Open a terminal and run the Python script. It will start scanning and will generate the `treemap_data.json` file in the same directory.
+Open a terminal and run the Python script. It's best to run it in the background so it can continue working.
 
 ```bash
-python3 BBSqueeze.py
+python3 BBSqueeze.py &
 ```
 
-The script will run continuously and update the JSON file every two minutes.
+The script will start scanning and will generate the JSON data files in the same directory.
 
-### 3. View the Heatmap
+### 3. View the Dashboard
 
-To avoid browser security errors (CORS), you need to serve the files from a local web server. Python has a simple one built-in.
+To view the web interface, you need to serve the files from a local web server to avoid browser security errors (CORS). Python has a simple one built-in.
 
 In your terminal, from the project directory, run:
 
@@ -49,10 +66,4 @@ This will start a server, usually on port 8000. Now, open your web browser and n
 
 **http://localhost:8000/SqueezeHeatmap.html**
 
-The heatmap will load and will automatically refresh every two minutes to show the latest scanner results.
-
--   **Green cells**: Stocks with bullish momentum.
--   **Red cells**: Stocks with bearish momentum.
--   **Gray cells**: Neutral momentum.
-
-The intensity of the color indicates the Relative Volume (RVOL), with brighter colors signifying higher RVOL. You can hover over any cell to see detailed information and click on it to open the stock's chart on TradingView.
+From there, you can use the navigation links to switch between the different views. The data on the pages will refresh automatically.
