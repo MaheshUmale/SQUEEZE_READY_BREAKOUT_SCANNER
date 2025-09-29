@@ -118,11 +118,15 @@ tf_display_map = {
 tf_suffix_map = {v: k for k, v in tf_display_map.items()}
 
 # Construct select columns for all timeframes
-select_cols = [
-    'name', 'logoid', 'close', 'volume|5', 'Value.Traded|5', 'average_volume_10d_calc|5', 'MACD.hist'
-]
+select_cols = ['name', 'logoid', 'close', 'MACD.hist']
 for tf in timeframes:
-    select_cols.extend([f'KltChnl.lower{tf}', f'KltChnl.upper{tf}', f'BB.lower{tf}', f'BB.upper{tf}', f'ATR{tf}', f'SMA20{tf}'])
+    select_cols.extend([
+        f'KltChnl.lower{tf}', f'KltChnl.upper{tf}',
+        f'BB.lower{tf}', f'BB.upper{tf}',
+        f'ATR{tf}', f'SMA20{tf}',
+        f'volume{tf}', f'average_volume_10d_calc{tf}',
+        f'Value.Traded{tf}'
+    ])
 
 
 def get_highest_squeeze_tf(row):
@@ -130,6 +134,24 @@ def get_highest_squeeze_tf(row):
         if row.get(f'InSqueeze{tf_suffix}', False):
             return tf_display_map[tf_suffix]
     return 'Unknown'
+
+def get_dynamic_rvol(row, timeframe_name, tf_suffix_map):
+    """Calculates RVOL for a specific timeframe."""
+    tf_suffix = tf_suffix_map.get(timeframe_name)
+    if tf_suffix is None:
+        return 0
+
+    vol_col = f'volume{tf_suffix}'
+    avg_vol_col = f'average_volume_10d_calc{tf_suffix}'
+
+    volume = row.get(vol_col)
+    avg_volume = row.get(avg_vol_col)
+
+    if pd.isna(volume) or pd.isna(avg_volume) or avg_volume == 0:
+        return 0
+
+    return volume / avg_volume
+
 
 def get_squeeze_strength(row):
     """Calculates and categorizes the strength of the squeeze."""
@@ -353,7 +375,7 @@ while True:
             df_in_squeeze['squeeze_strength'] = df_in_squeeze.apply(get_squeeze_strength, axis=1)
             # Filter for only STRONG and VERY STRONG squeezes
             df_in_squeeze = df_in_squeeze[df_in_squeeze['squeeze_strength'].isin(['STRONG', 'VERY STRONG'])]
-            df_in_squeeze['rvol'] = (df_in_squeeze['volume|5'] / df_in_squeeze['average_volume_10d_calc|5'].replace(0, np.nan)).fillna(0)
+            df_in_squeeze['rvol'] = df_in_squeeze.apply(lambda row: get_dynamic_rvol(row, row['highest_tf'], tf_suffix_map), axis=1)
             df_in_squeeze['momentum'] = df_in_squeeze['MACD.hist'].apply(get_momentum_indicator)
             df_in_squeeze['HeatmapScore'] = (df_in_squeeze['rvol'] + 1) * df_in_squeeze['SqueezeCount'] * df_in_squeeze['momentum'].map({'Bullish': 1, 'Neutral': 0.5, 'Bearish': -1})
             generate_heatmap_json(df_in_squeeze, OUTPUT_JSON_IN_SQUEEZE)
@@ -414,7 +436,7 @@ while True:
                     df_newly_fired = pd.DataFrame(newly_fired_events)
                     df_newly_fired['URL'] = "https://in.tradingview.com/chart/N8zfIJVK/?symbol=" + df_newly_fired['ticker'].apply(urllib.parse.quote)
                     df_newly_fired['logo'] = df_newly_fired['logoid'].apply(lambda x: f"https://s3-symbol-logo.tradingview.com/{x}.svg" if pd.notna(x) and x.strip() else '')
-                    df_newly_fired['rvol'] = (df_newly_fired['volume|5'] / df_newly_fired['average_volume_10d_calc|5'].replace(0, np.nan)).fillna(0)
+                    df_newly_fired['rvol'] = df_newly_fired.apply(lambda row: get_dynamic_rvol(row, row['fired_timeframe'], tf_suffix_map), axis=1)
                     df_newly_fired['momentum'] = df_newly_fired.apply(lambda row: get_fired_breakout_direction(row, row['fired_timeframe'], tf_suffix_map), axis=1)
                     df_newly_fired['SqueezeCount'] = 1
                     df_newly_fired['highest_tf'] = df_newly_fired['fired_timeframe']
