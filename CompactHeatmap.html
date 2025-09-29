@@ -38,23 +38,24 @@
              background-color: #374151; /* gray-700 */
              color: #d1d5db; /* gray-300 */
         }
+        .timeframe-box {
+            background-color: #1f2937; /* gray-800 */
+            border-radius: 8px;
+            padding: 1rem;
+            border: 1px solid #374151; /* gray-700 */
+        }
         .grid-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
             gap: 6px;
         }
-        .timeframe-group {
-            margin-bottom: 2rem;
-        }
         .timeframe-title {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 0.75rem;
-            color: #9ca3af;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            user-select: none;
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #4b5563;
+            color: #d1d5db;
         }
         .timeframe-title .arrow {
             margin-right: 8px;
@@ -145,7 +146,7 @@
             <button data-strength="VERY STRONG" class="filter-btn px-3 py-1 rounded-md text-sm font-medium transition">VERY STRONG</button>
         </div>
 
-        <div id="heatmap-container" class="grid-container"></div>
+        <div id="heatmap-container" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6"></div>
         <div class="tooltip"></div>
     </div>
 
@@ -177,27 +178,51 @@
         }
 
         function renderHeatmap(data) {
-            heatmapContainer.html(data.length === 0 ? "<p class='text-center text-gray-400'>No stocks match the current filter.</p>" : "");
+            if (data.length === 0) {
+                heatmapContainer.html("<p class='col-span-full text-gray-400 text-center py-4'>No stocks match the current filter.</p>");
+                return;
+            } else {
+                 heatmapContainer.html("");
+            }
 
-            const cells = heatmapContainer.selectAll('.cell').data(data, d => d.name);
-            cells.exit().remove();
+            const tfOrder = ['Monthly', 'Weekly', '4H', '2H', '1H', '30m', '15m', '5m', '1m', 'Daily', 'Unknown'];
+            const groupedData = d3.group(data, d => d.highest_tf);
+            const sortedGroups = Array.from(groupedData.entries()).sort((a, b) => tfOrder.indexOf(a[0]) - tfOrder.indexOf(b[0]));
 
-            const enterCells = cells.enter().append("div").attr("class", "cell")
-                .on("click", (event, d) => window.open(d.url, "_blank"))
-                .on("mouseover", function(event, d) {
-                    tooltip.transition().duration(200).style("opacity", .9);
-                    tooltip.html(getTooltipHtml(d)).style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 28) + "px");
-                })
-                .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
+            const groups = heatmapContainer.selectAll('.timeframe-box').data(sortedGroups, d => d[0]);
+            groups.exit().remove();
 
-            enterCells.append("div").attr("class", "squeeze-badge").text(d => d.count);
-            enterCells.append("img").attr("class", "stock-logo");
-            enterCells.append("div").attr("class", "stock-ticker");
+            const enterGroups = groups.enter().append('div').attr('class', 'timeframe-box');
+            enterGroups.append('h2').attr('class', 'timeframe-title').text(d => d[0]);
+            enterGroups.append('div').attr('class', 'grid-container');
 
-            const updateCells = enterCells.merge(cells);
-            updateCells.style("background-color", d => getCellColor(d));
-            updateCells.select(".stock-logo").attr("src", d => d.logo).style("display", d => d.logo ? 'block' : 'none');
-            updateCells.select(".stock-ticker").text(d => d.name.replace('NSE:', ''));
+            const updateGroups = enterGroups.merge(groups);
+            updateGroups.select('h2').text(d => d[0]);
+
+            updateGroups.each(function([tf, stocks]) {
+                const sortedStocks = stocks.sort((a,b) => b.value - a.value);
+                const cells = d3.select(this).select('.grid-container').selectAll('.cell').data(sortedStocks, d => d.name);
+                cells.exit().remove();
+
+                const enterCells = cells.enter().append("div").attr("class", "cell")
+                    .on("click", (event, d) => window.open(d.url, "_blank"))
+                    .on("mouseover", function(event, d) {
+                        tooltip.transition().duration(200).style("opacity", .9);
+                        tooltip.html(getTooltipHtml(d)).style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 28) + "px");
+                    })
+                    .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
+
+                enterCells.append("div").attr("class", "squeeze-badge").text(d => d.count);
+                enterCells.append("img").attr("class", "stock-logo");
+                enterCells.append("div").attr("class", "stock-ticker");
+                enterCells.append("div").attr("class", "stock-info");
+
+                const updateCells = enterCells.merge(cells);
+                updateCells.style("background-color", d => getCellColor(d));
+                updateCells.select(".stock-logo").attr("src", d => d.logo).style("display", d => d.logo ? 'block' : 'none');
+                updateCells.select(".stock-ticker").text(d => d.name.replace('NSE:', ''));
+                updateCells.select(".stock-info").text(d => `RVOL: ${d.rvol.toFixed(2)}`);
+            });
         }
 
         function applyFiltersAndRender() {
@@ -212,15 +237,6 @@
                     filteredData = fullInSqueezeData.filter(d => activeLevels.includes(d.squeeze_strength));
                 }
             }
-
-            const tfOrder = ['Monthly', 'Weekly', '4H', '2H', '1H', '30m', '15m', '5m', '1m', 'Daily', 'Unknown'];
-            filteredData.sort((a, b) => {
-                const tfIndexA = tfOrder.indexOf(a.highest_tf);
-                const tfIndexB = tfOrder.indexOf(b.highest_tf);
-                if (tfIndexA !== tfIndexB) return tfIndexA - tfIndexB;
-                return b.count - a.count;
-            });
-
             renderHeatmap(filteredData);
         }
 
