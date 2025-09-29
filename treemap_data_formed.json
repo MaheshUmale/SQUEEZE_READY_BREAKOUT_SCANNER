@@ -88,17 +88,6 @@
         "squeeze_strength": "VERY STRONG"
     },
     {
-        "name": "NSE:BSE",
-        "value": -1.8084536454699371,
-        "count": 1,
-        "rvol": 0.808453645469937,
-        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ABSE",
-        "logo": "https://s3-symbol-logo.tradingview.com/bse.svg",
-        "momentum": "Bearish",
-        "highest_tf": "30m",
-        "squeeze_strength": "Regular"
-    },
-    {
         "name": "NSE:WAAREEENER",
         "value": -4.123138421367861,
         "count": 3,
@@ -154,17 +143,6 @@
         "squeeze_strength": "Regular"
     },
     {
-        "name": "NSE:ETERNAL",
-        "value": -1.2903502729478151,
-        "count": 1,
-        "rvol": 0.2903502729478152,
-        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AETERNAL",
-        "logo": "https://s3-symbol-logo.tradingview.com/zomato.svg",
-        "momentum": "Bearish",
-        "highest_tf": "Daily",
-        "squeeze_strength": "Regular"
-    },
-    {
         "name": "NSE:TEJASNET",
         "value": -8.414596853093004,
         "count": 5,
@@ -184,17 +162,6 @@
         "logo": "https://s3-symbol-logo.tradingview.com/garden-reach-shipbuilders-and-en.svg",
         "momentum": "Bullish",
         "highest_tf": "15m",
-        "squeeze_strength": "Regular"
-    },
-    {
-        "name": "NSE:RELIANCE",
-        "value": -4.129177010429409,
-        "count": 3,
-        "rvol": 0.37639233680980266,
-        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ARELIANCE",
-        "logo": "https://s3-symbol-logo.tradingview.com/reliance-industrial-infrastructure.svg",
-        "momentum": "Bearish",
-        "highest_tf": "Monthly",
         "squeeze_strength": "Regular"
     },
     {
@@ -231,39 +198,6 @@
         "squeeze_strength": "STRONG"
     },
     {
-        "name": "NSE:SUNPHARMA",
-        "value": 1.3691465316907014,
-        "count": 1,
-        "rvol": 0.36914653169070133,
-        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ASUNPHARMA",
-        "logo": "https://s3-symbol-logo.tradingview.com/sun-pharmaceutical.svg",
-        "momentum": "Bullish",
-        "highest_tf": "Weekly",
-        "squeeze_strength": "STRONG"
-    },
-    {
-        "name": "NSE:BHARTIARTL",
-        "value": -3.5116634140741594,
-        "count": 3,
-        "rvol": 0.17055447135805304,
-        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ABHARTIARTL",
-        "logo": "https://s3-symbol-logo.tradingview.com/airtel.svg",
-        "momentum": "Bearish",
-        "highest_tf": "Weekly",
-        "squeeze_strength": "Regular"
-    },
-    {
-        "name": "NSE:ADANIGREEN",
-        "value": 1.732217440763495,
-        "count": 1,
-        "rvol": 0.732217440763495,
-        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AADANIGREEN",
-        "logo": "https://s3-symbol-logo.tradingview.com/adani.svg",
-        "momentum": "Bullish",
-        "highest_tf": "Weekly",
-        "squeeze_strength": "STRONG"
-    },
-    {
         "name": "NSE:BHARATGEAR",
         "value": 2.282769530693738,
         "count": 1,
@@ -275,39 +209,6 @@
         "squeeze_strength": "Regular"
     },
     {
-        "name": "NSE:INDUSINDBK",
-        "value": -3.2915101591370104,
-        "count": 2,
-        "rvol": 0.6457550795685052,
-        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AINDUSINDBK",
-        "logo": "https://s3-symbol-logo.tradingview.com/indusind-bank.svg",
-        "momentum": "Bearish",
-        "highest_tf": "5m",
-        "squeeze_strength": "Regular"
-    },
-    {
-        "name": "NSE:WOCKPHARMA",
-        "value": -1.9351169319144672,
-        "count": 1,
-        "rvol": 0.9351169319144673,
-        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AWOCKPHARMA",
-        "logo": "https://s3-symbol-logo.tradingview.com/wockhardt.svg",
-        "momentum": "Bearish",
-        "highest_tf": "Daily",
-        "squeeze_strength": "Regular"
-    },
-    {
-        "name": "NSE:AXISBANK",
-        "value": 1.4724336725363756,
-        "count": 1,
-        "rvol": 0.4724336725363755,
-        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AAXISBANK",
-        "logo": "https://s3-symbol-logo.tradingview.com/axis-bank.svg",
-        "momentum": "Bullish",
-        "highest_tf": "Monthly",
-        "squeeze_strength": "STRONG"
-    },
-    {
         "name": "NSE:HINDZINC",
         "value": 6.743129939861369,
         "count": 3,
@@ -317,28 +218,6 @@
         "momentum": "Bullish",
         "highest_tf": "4H",
         "squeeze_strength": "STRONG"
-    },
-    {
-        "name": "NSE:SBIN",
-        "value": 2.486336044811274,
-        "count": 2,
-        "rvol": 0.24316802240563695,
-        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ASBIN",
-        "logo": "https://s3-symbol-logo.tradingview.com/state-bank.svg",
-        "momentum": "Bullish",
-        "highest_tf": "Monthly",
-        "squeeze_strength": "STRONG"
-    },
-    {
-        "name": "NSE:BAJFINANCE",
-        "value": -1.6053322332419337,
-        "count": 1,
-        "rvol": 0.6053322332419337,
-        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ABAJFINANCE",
-        "logo": "https://s3-symbol-logo.tradingview.com/bajaj-finance.svg",
-        "momentum": "Bearish",
-        "highest_tf": "Weekly",
-        "squeeze_strength": "Regular"
     },
     {
         "name": "NSE:MOTHERSON",
@@ -363,17 +242,6 @@
         "squeeze_strength": "Regular"
     },
     {
-        "name": "NSE:INDHOTEL",
-        "value": -1.788034610369106,
-        "count": 1,
-        "rvol": 0.7880346103691059,
-        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AINDHOTEL",
-        "logo": "https://s3-symbol-logo.tradingview.com/indian-hotels.svg",
-        "momentum": "Bearish",
-        "highest_tf": "Weekly",
-        "squeeze_strength": "STRONG"
-    },
-    {
         "name": "NSE:CONCOR",
         "value": -4.895298226984258,
         "count": 4,
@@ -385,39 +253,6 @@
         "squeeze_strength": "Regular"
     },
     {
-        "name": "NSE:ASHOKLEY",
-        "value": 5.369645645255488,
-        "count": 4,
-        "rvol": 0.34241141131387215,
-        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AASHOKLEY",
-        "logo": "https://s3-symbol-logo.tradingview.com/ashok-leyland.svg",
-        "momentum": "Bullish",
-        "highest_tf": "Monthly",
-        "squeeze_strength": "Regular"
-    },
-    {
-        "name": "NSE:SWIGGY",
-        "value": -3.747411715262358,
-        "count": 3,
-        "rvol": 0.24913723842078603,
-        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ASWIGGY",
-        "logo": "https://s3-symbol-logo.tradingview.com/swiggy-ltd.svg",
-        "momentum": "Bearish",
-        "highest_tf": "15m",
-        "squeeze_strength": "VERY STRONG"
-    },
-    {
-        "name": "NSE:CANBK",
-        "value": 3.6986978156257964,
-        "count": 2,
-        "rvol": 0.8493489078128981,
-        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ACANBK",
-        "logo": "https://s3-symbol-logo.tradingview.com/canara-bank.svg",
-        "momentum": "Bullish",
-        "highest_tf": "Monthly",
-        "squeeze_strength": "Regular"
-    },
-    {
         "name": "NSE:MAXHEALTH",
         "value": -3.888111223294989,
         "count": 3,
@@ -426,28 +261,6 @@
         "logo": "https://s3-symbol-logo.tradingview.com/max-healthcare.svg",
         "momentum": "Bearish",
         "highest_tf": "1H",
-        "squeeze_strength": "Regular"
-    },
-    {
-        "name": "NSE:URBANCO",
-        "value": 0.6080002544089989,
-        "count": 1,
-        "rvol": 0.21600050881799762,
-        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AURBANCO",
-        "logo": "",
-        "momentum": "Neutral",
-        "highest_tf": "30m",
-        "squeeze_strength": "Regular"
-    },
-    {
-        "name": "NSE:SUZLON",
-        "value": -1.3305079188181763,
-        "count": 1,
-        "rvol": 0.33050791881817637,
-        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ASUZLON",
-        "logo": "https://s3-symbol-logo.tradingview.com/suzlon-energy.svg",
-        "momentum": "Bearish",
-        "highest_tf": "Daily",
         "squeeze_strength": "Regular"
     },
     {
@@ -493,28 +306,6 @@
         "momentum": "Bearish",
         "highest_tf": "Weekly",
         "squeeze_strength": "Regular"
-    },
-    {
-        "name": "NSE:TATASTEEL",
-        "value": -3.8319952583948944,
-        "count": 3,
-        "rvol": 0.277331752798298,
-        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ATATASTEEL",
-        "logo": "https://s3-symbol-logo.tradingview.com/tata.svg",
-        "momentum": "Bearish",
-        "highest_tf": "Monthly",
-        "squeeze_strength": "STRONG"
-    },
-    {
-        "name": "NSE:VEDL",
-        "value": 4.284374776748505,
-        "count": 3,
-        "rvol": 0.4281249255828352,
-        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AVEDL",
-        "logo": "https://s3-symbol-logo.tradingview.com/steel-dynamics.svg",
-        "momentum": "Bullish",
-        "highest_tf": "Weekly",
-        "squeeze_strength": "VERY STRONG"
     },
     {
         "name": "NSE:DELHIVERY",

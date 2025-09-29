@@ -3,39 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Most Recently Fired Squeezes</title>
+    <title>Newly Formed Squeezes</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         body { font-family: sans-serif; background-color: #111827; color: white; }
-        .fired-item {
+        .formed-item {
             border: 1px solid #374151;
             transition: background-color 0.2s;
         }
-        .fired-item:hover {
+        .formed-item:hover {
             background-color: #1f2937;
         }
     </style>
 </head>
 <body class="bg-gray-900">
     <div class="container mx-auto p-4 md:p-6">
-        <header class="text-center mb-6">
-            <h1 class="text-2xl md:text-3xl font-bold">Squeeze Dashboard</h1>
-            <nav class="mt-2">
-                <a href="SqueezeHeatmap.html" class="text-gray-400 hover:text-blue-300 transition px-2">Main Heatmap</a>
-                <a href="CompactHeatmap.html" class="text-gray-400 hover:text-blue-300 transition px-2">Compact View</a>
-                <a href="Formed.html" class="text-gray-400 hover:text-blue-300 transition px-2">Newly Formed</a>
-                <a href="Fired.html" class="text-blue-400 font-bold border-b-2 border-blue-400 pb-1 px-2">Recently Fired</a>
-            </nav>
+        <header class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl md:text-3xl font-bold">Newly Formed Squeezes</h1>
+            <a href="SqueezeHeatmap.html" class="text-blue-400 hover:text-blue-300 transition">&larr; Back to Main Heatmap</a>
         </header>
 
-        <div id="fired-list" class="space-y-4">
-            <!-- Fired squeezes will be dynamically inserted here -->
+        <div id="formed-list" class="space-y-4">
+            <!-- Newly formed squeezes will be dynamically inserted here -->
         </div>
     </div>
 
     <script>
-        const firedListContainer = d3.select("#fired-list");
+        const formedListContainer = d3.select("#formed-list");
 
         function getCellColor(d) {
             if (d.momentum === 'Bullish') return "#10b981"; // green-500
@@ -43,21 +38,21 @@
             return "#6b7280"; // gray-500
         }
 
-        function renderFiredList(data) {
+        function renderFormedList(data) {
             if (data.length === 0) {
-                firedListContainer.html("<p class='text-gray-400 text-center py-8'>No squeezes have fired recently. Waiting for data...</p>");
+                formedListContainer.html("<p class='text-gray-400 text-center py-8'>No new squeezes have formed recently. Waiting for data...</p>");
                 return;
             }
 
-            const items = firedListContainer.selectAll(".fired-item")
-                .data(data, d => `${d.name}-${d.fired_timeframe}`);
+            const items = formedListContainer.selectAll(".formed-item")
+                .data(data, d => `${d.name}-${d.highest_tf}`);
 
             items.exit().remove();
 
             const enterItems = items.enter().append("a")
                 .attr("href", d => d.url)
                 .attr("target", "_blank")
-                .attr("class", "fired-item p-4 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center transition duration-200");
+                .attr("class", "formed-item p-4 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center transition duration-200");
 
             const leftSide = enterItems.append("div")
                 .attr("class", "flex items-center mb-2 sm:mb-0");
@@ -73,7 +68,7 @@
                 .text(d => d.name.replace('NSE:', ''));
             tickerInfo.append("div")
                 .attr("class", "text-sm text-gray-400")
-                .text(d => `Fired on ${d.fired_timeframe}`);
+                .text(d => `Squeeze formed on ${d.highest_tf}`);
 
             const rightSide = enterItems.append("div")
                 .attr("class", "flex flex-col sm:text-right w-full sm:w-auto");
@@ -87,34 +82,29 @@
 
             rightSide.append("div")
                 .attr("class", "text-sm text-gray-300")
-                .html(d => `Vol: <span class="font-semibold">${d.previous_volatility.toFixed(2)}% &rarr; ${d.current_volatility.toFixed(2)}%</span>`);
-
+                .html(d => `RVOL: <span class="font-semibold">${d.rvol.toFixed(2)}</span>`);
 
             const updateItems = enterItems.merge(items);
-            // You can add update logic here if needed, e.g., to flash color on update
         }
 
-        let existingFired = [];
+        let existingFormed = [];
 
         async function loadData() {
             try {
-                const firedData = await d3.json(`treemap_data_fired.json?t=${new Date().getTime()}`);
+                const formedData = await d3.json(`treemap_data_formed.json?t=${new Date().getTime()}`);
 
-                // Only update if the data has changed
-                if (JSON.stringify(firedData) !== JSON.stringify(existingFired)) {
-                    existingFired = firedData;
-                    // Sort by most recent first, assuming higher score is more recent/important
-                    const sortedData = firedData.sort((a, b) => b.value - a.value);
-                    renderFiredList(sortedData);
+                if (JSON.stringify(formedData) !== JSON.stringify(existingFormed)) {
+                    existingFormed = formedData;
+                    const sortedData = formedData.sort((a, b) => b.value - a.value);
+                    renderFormedList(sortedData);
                 }
 
             } catch (error) {
                 console.error("Failed to load data:", error);
-                firedListContainer.html("<p class='text-center text-red-500'>Could not load 'Fired' data. Check if the backend script is running.</p>");
+                formedListContainer.html("<p class='text-center text-red-500'>Could not load 'Formed' data. Check if the backend script is running.</p>");
             }
         }
 
-        // Initial load and set interval
         loadData();
         setInterval(loadData, 30000); // Poll every 30 seconds
     </script>

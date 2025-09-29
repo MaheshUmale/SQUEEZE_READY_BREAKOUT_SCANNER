@@ -101,6 +101,7 @@ def generate_heatmap_json(df, output_path):
 # --- Configuration ---
 DB_FILE = 'squeeze_history.db'
 OUTPUT_JSON_FIRED = 'treemap_data_fired.json'
+OUTPUT_JSON_FORMED = 'treemap_data_formed.json'
 OUTPUT_JSON_IN_SQUEEZE = 'treemap_data_in_squeeze.json'
 TIME_INTERVAL_SECONDS = 120
 
@@ -310,15 +311,30 @@ while True:
             print("No tickers found currently in a squeeze.")
             generate_heatmap_json(pd.DataFrame(), OUTPUT_JSON_IN_SQUEEZE)
 
-        # 3. Identify and process "Squeeze Fired" stocks
-        # Create sets of (ticker, timeframe) for comparison
+        # 3. Identify Newly Formed and Fired Squeezes
         prev_squeeze_set = {(ticker, tf) for ticker, tf, vol in prev_squeeze_pairs}
         current_squeeze_set = {(ticker, tf) for ticker, tf, vol in current_squeeze_pairs}
+
+        # --- Process Newly Formed Squeezes ---
+        formed_pairs = current_squeeze_set - prev_squeeze_set
+        formed_tickers = list(set(ticker for ticker, tf in formed_pairs))
+        print(f"Found {len(formed_pairs)} (ticker, timeframe) pairs where a new squeeze has formed.")
+
+        if formed_tickers:
+            # We can reuse the main df_in_squeeze dataframe as it contains all the necessary data
+            df_formed_processed = df_in_squeeze[df_in_squeeze['ticker'].isin(formed_tickers)].copy()
+            # Here you could add more specific logic if needed, but for now, we pass it directly
+            generate_heatmap_json(df_formed_processed, OUTPUT_JSON_FORMED)
+            print(f"--- Newly Formed Squeeze Results ---")
+            print(df_formed_processed[['ticker', 'highest_tf', 'momentum', 'rvol', 'HeatmapScore']])
+        else:
+            print("No new squeezes formed in this interval.")
+            generate_heatmap_json(pd.DataFrame(), OUTPUT_JSON_FORMED)
+
+
+        # --- Process Squeeze Fired Stocks ---
         fired_pairs = prev_squeeze_set - current_squeeze_set
-
-        # Create a lookup map for previous volatility
         prev_vol_map = {(ticker, tf): vol for ticker, tf, vol in prev_squeeze_pairs}
-
         fired_tickers = list(set(ticker for ticker, tf in fired_pairs))
         print(f"Found {len(fired_pairs)} (ticker, timeframe) pairs where squeeze has fired.")
 
