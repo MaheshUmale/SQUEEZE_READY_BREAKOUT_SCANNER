@@ -24,13 +24,38 @@ The application is split into several focused pages:
 
 ## How It Works
 
-1.  The **`BBSqueeze.py`** script runs continuously in the background.
-2.  It uses the `tradingview_screener` library to scan for stocks that meet the squeeze criteria (Bollinger Bands inside Keltner Channels).
-3.  It maintains a history of squeezes in a local SQLite database (`squeeze_history.db`).
-4.  In each cycle, it compares the current list of squeezes with the previous one to identify **newly formed** and **recently fired** squeezes.
-5.  For fired squeezes, it calculates the change in volatility to ensure it's a meaningful event.
-6.  The script generates three JSON files (`treemap_data_in_squeeze.json`, `treemap_data_formed.json`, `treemap_data_fired.json`) with the latest data.
-7.  The HTML pages (`SqueezeHeatmap.html`, `Formed.html`, `Fired.html`) fetch this data and update the visualizations in real-time.
+The scanner operates through a sophisticated, multi-step process to identify and qualify squeeze opportunities.
+
+### 1. Initial Scan & Squeeze Detection
+The `BBSqueeze.py` script continuously scans the market using the following core logic:
+- **The Squeeze Condition**: It identifies stocks where the **Bollinger Bands (BB)** are inside the **Keltner Channels (KC)**. This indicates a period of low volatility and a potential for a powerful move.
+- **Filtering**: It applies a set of baseline filters to ensure data quality, including minimum price, volume, and traded value, while focusing on primary common stocks on the NSE.
+
+### 2. Squeeze Strength Calculation
+Once a stock is identified as being in a squeeze, the script calculates its **strength**:
+- The strength is determined by the ratio of the Keltner Channel width to the Bollinger Band width (`KC Width / BB Width`).
+- Squeezes are categorized as **"STRONG"** (ratio >= 1.5) or **"VERY STRONG"** (ratio >= 2).
+- **Only "STRONG" and "VERY STRONG" squeezes are kept for further processing.**
+
+### 3. Event Detection: Formed vs. Fired
+The script maintains a history of squeezes in a local database to identify two key events:
+- **Newly Formed**: A stock that is in a strong squeeze *now* but was not in the previous scan.
+- **Recently Fired**: A stock that was in a strong squeeze in the previous scan but is *not* anymore, indicating the squeeze has "fired" and volatility is expanding.
+
+### 4. Fired Squeeze Analysis
+For a "fired" squeeze to be considered a valid breakout signal, it must pass two additional checks:
+- **Increased Volatility**: The script calculates volatility using the formula `(BB Upper - SMA20) / ATR`. A fired event is only valid if the current volatility is greater than the volatility recorded when the squeeze first formed.
+- **Breakout Direction**: The direction of the breakout is determined by price action, not just momentum indicators:
+    - **Bullish Breakout**: `Close > BB.upper` AND `BB.upper > KC.upper`.
+    - **Bearish Breakout**: `Close < BB.lower` AND `BB.lower < KC.lower`.
+
+### 5. Dynamic RVOL Calculation
+To provide the most accurate measure of volume strength, Relative Volume (RVOL) is calculated dynamically based on the relevant timeframe for each event:
+- **For "In Squeeze" stocks**, RVOL is calculated for the highest timeframe the stock is currently in a squeeze on.
+- **For "Fired Squeeze" stocks**, RVOL is calculated for the timeframe the squeeze fired on.
+
+### 6. Data Generation & Visualization
+The script generates three JSON files with the processed data, which are then fetched by the HTML pages to create the real-time dashboard visualizations.
 
 ## Setup and Usage
 

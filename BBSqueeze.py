@@ -38,18 +38,6 @@ def append_df_to_csv(df, csv_path):
         df.to_csv(csv_path, mode='a', header=False, index=False)
 
 
-def get_momentum_indicator(macd_hist_value):
-    """
-    Determines momentum based on the MACD histogram value.
-    """
-    if macd_hist_value > 0:
-        return 'Bullish'
-    elif macd_hist_value < 0:
-        return 'Bearish'
-    else:
-        return 'Neutral'
-
-
 def generate_heatmap_json(df, output_path):
     """
     Generates a simple, flat JSON array of stock data for the D3 heatmap.
@@ -332,16 +320,18 @@ while True:
         # 2. Find all stocks currently in a squeeze
         squeeze_conditions = [And(col(f'BB.upper{tf}') < col(f'KltChnl.upper{tf}'), col(f'BB.lower{tf}') > col(f'KltChnl.lower{tf}')) for tf in timeframes]
 
+        # --- Scanner Filters ---
+        # Define the set of rules to find stocks in a squeeze.
         filters = [
-            col('is_primary') == True,
-            col('typespecs').has('common'),
-            col('type') == 'stock',
-            col('exchange') == 'NSE',
-            col('close').between(20, 10000),
-            col('active_symbol') == True,
-            col('average_volume_10d_calc|5') > 50000,
-            col('Value.Traded|5') > 10000000,
-            Or(*squeeze_conditions)
+            col('is_primary') == True,  # Only primary listings
+            col('typespecs').has('common'),  # Only common stocks
+            col('type') == 'stock',  # Exclude ETFs, etc.
+            col('exchange') == 'NSE',  # Only stocks on the National Stock Exchange
+            col('close').between(20, 10000),  # Price filter
+            col('active_symbol') == True,  # Only actively traded symbols
+            col('average_volume_10d_calc|5') > 50000,  # Minimum average volume
+            col('Value.Traded|5') > 10000000,  # Minimum traded value
+            Or(*squeeze_conditions)  # The core squeeze condition across all timeframes
         ]
         query_in_squeeze = Query().select(*select_cols).where2(And(*filters)).set_markets('india')
         _, df_in_squeeze = query_in_squeeze.get_scanner_data()
@@ -372,11 +362,16 @@ while True:
                 df_in_squeeze[f'InSqueeze{tf}'] = (df_in_squeeze[f'BB.upper{tf}'] < df_in_squeeze[f'KltChnl.upper{tf}']) & (df_in_squeeze[f'BB.lower{tf}'] > df_in_squeeze[f'KltChnl.lower{tf}'])
             df_in_squeeze['SqueezeCount'] = df_in_squeeze[squeeze_count_cols].sum(axis=1)
             df_in_squeeze['highest_tf'] = df_in_squeeze.apply(get_highest_squeeze_tf, axis=1)
+            # --- "In Squeeze" Data Enrichment ---
+            # Calculate the strength of the squeeze (Regular, Strong, Very Strong)
             df_in_squeeze['squeeze_strength'] = df_in_squeeze.apply(get_squeeze_strength, axis=1)
-            # Filter for only STRONG and VERY STRONG squeezes
+            # Filter for only STRONG and VERY STRONG squeezes, as requested
             df_in_squeeze = df_in_squeeze[df_in_squeeze['squeeze_strength'].isin(['STRONG', 'VERY STRONG'])]
+            # Calculate RVOL using the volume data for the highest timeframe the stock is in a squeeze
             df_in_squeeze['rvol'] = df_in_squeeze.apply(lambda row: get_dynamic_rvol(row, row['highest_tf'], tf_suffix_map), axis=1)
-            df_in_squeeze['momentum'] = df_in_squeeze['MACD.hist'].apply(get_momentum_indicator)
+            # Determine momentum for "In Squeeze" stocks directly from MACD histogram
+            df_in_squeeze['momentum'] = df_in_squeeze['MACD.hist'].apply(lambda x: 'Bullish' if x > 0 else 'Bearish' if x < 0 else 'Neutral')
+            # Calculate a heatmap score for visual representation
             df_in_squeeze['HeatmapScore'] = (df_in_squeeze['rvol'] + 1) * df_in_squeeze['SqueezeCount'] * df_in_squeeze['momentum'].map({'Bullish': 1, 'Neutral': 0.5, 'Bearish': -1})
             generate_heatmap_json(df_in_squeeze, OUTPUT_JSON_IN_SQUEEZE)
         else:
@@ -434,13 +429,17 @@ while True:
                                 newly_fired_events.append(fired_event)
                 if newly_fired_events:
                     df_newly_fired = pd.DataFrame(newly_fired_events)
+                    # --- "Fired Squeeze" Data Enrichment ---
                     df_newly_fired['URL'] = "https://in.tradingview.com/chart/N8zfIJVK/?symbol=" + df_newly_fired['ticker'].apply(urllib.parse.quote)
                     df_newly_fired['logo'] = df_newly_fired['logoid'].apply(lambda x: f"https://s3-symbol-logo.tradingview.com/{x}.svg" if pd.notna(x) and x.strip() else '')
+                    # Calculate RVOL using the volume data for the timeframe the squeeze fired on
                     df_newly_fired['rvol'] = df_newly_fired.apply(lambda row: get_dynamic_rvol(row, row['fired_timeframe'], tf_suffix_map), axis=1)
+                    # Determine breakout direction (momentum) using the new price-based logic
                     df_newly_fired['momentum'] = df_newly_fired.apply(lambda row: get_fired_breakout_direction(row, row['fired_timeframe'], tf_suffix_map), axis=1)
-                    df_newly_fired['SqueezeCount'] = 1
+                    df_newly_fired['SqueezeCount'] = 1  # Squeeze count is always 1 for a fired event
                     df_newly_fired['highest_tf'] = df_newly_fired['fired_timeframe']
                     df_newly_fired['squeeze_strength'] = 'FIRED'
+                    # Calculate a heatmap score for visual representation
                     df_newly_fired['HeatmapScore'] = (df_newly_fired['rvol'] + 1) * df_newly_fired['momentum'].map({'Bullish': 1, 'Neutral': 0.5, 'Bearish': -1})
                     save_fired_events_to_db(df_newly_fired)
                     append_df_to_csv(df_newly_fired, 'BBSCAN_FIRED_' + datetime.now().strftime('%d_%m_%y') + '.csv')
