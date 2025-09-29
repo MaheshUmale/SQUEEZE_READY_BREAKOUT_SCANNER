@@ -293,7 +293,7 @@ while True:
             col('Value.Traded|5') > 10000000,
             Or(*squeeze_conditions)
         ]
-        query_in_squeeze = Query().select(*select_cols).where(*filters).set_markets('india')
+        query_in_squeeze = Query().select(*select_cols).where2(And(*filters)).set_markets('india')
         _, df_in_squeeze = query_in_squeeze.get_scanner_data()
 
         current_squeeze_pairs = []
