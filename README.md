@@ -17,8 +17,8 @@ The results are visualized through a responsive, multi-page web dashboard that u
 
 The application is split into several focused pages:
 
-1.  **Main Heatmap**: The primary dashboard showing all stocks currently in a squeeze, organized by timeframe and momentum (Bullish/Bearish).
-2.  **Compact View**: A more condensed version of the heatmap for a high-level overview.
+1.  **Main Heatmap**: The primary dashboard that contains two main sections: "Squeeze Fired" and "In Squeeze". Both sections present data in a compact, time-grouped grid, providing a comprehensive overview of all squeeze activity.
+2.  **Compact View**: A dedicated, standalone view of the "In Squeeze" data, presented in the same compact, time-grouped format as the main heatmap for a focused look at stocks currently in a squeeze.
 3.  **Newly Formed**: A real-time list showing only the squeezes that have been identified in the most recent scan cycle.
 4.  **Recently Fired**: A real-time list showing only the squeezes that have fired *and* have confirmed an increase in volatility since the squeeze began.
 
