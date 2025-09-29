@@ -38,9 +38,15 @@
              background-color: #374151; /* gray-700 */
              color: #d1d5db; /* gray-300 */
         }
+        .timeframe-box {
+            background-color: #1f2937; /* gray-800 */
+            border-radius: 8px;
+            padding: 1rem;
+            border: 1px solid #374151; /* gray-700 */
+        }
         .grid-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
             gap: 6px;
         }
         .timeframe-group {
@@ -51,10 +57,6 @@
             font-weight: 600;
             margin-bottom: 0.75rem;
             color: #9ca3af;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            user-select: none;
         }
         .timeframe-title .arrow {
             margin-right: 8px;
@@ -148,7 +150,9 @@
         <!-- Squeeze Fired Section -->
         <div id="fired-section-wrapper" class="mb-8">
             <h2 class="section-title"><span class="arrow">&#9662;</span>Squeeze Fired</h2>
-            <div id="fired-container" class="grid-container"></div>
+            <div id="fired-container" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                <!-- Timeframe boxes will be dynamically inserted here -->
+            </div>
         </div>
 
         <!-- In Squeeze Section -->
@@ -190,7 +194,7 @@
                 const prevVol = d.previous_volatility.toFixed(2);
                 const currVol = d.current_volatility.toFixed(2);
                 squeezeHtml = `Fired on ${d.fired_timeframe}<br/>` +
-                              `Volatility: <strong style="color: #10b981;">${prevVol}% ➞ ${currVol}%</strong><br/>`;
+                              `Volatility: <strong style="color: #10b981;">${prevVol}% &rarr; ${currVol}%</strong><br/>`;
             }
             return `<strong>${d.name.replace('NSE:', '')}</strong><br/>` + squeezeHtml + momentumHtml + `RVOL: ${d.rvol.toFixed(2)}`;
         }
@@ -207,6 +211,7 @@
             if (type === 'in_squeeze') {
                 enterCells.append("div").attr("class", "squeeze-badge").text(d => d.count);
             }
+
             enterCells.append("img").attr("class", "stock-logo");
             enterCells.append("div").attr("class", "stock-ticker");
             enterCells.append("div").attr("class", "stock-info");
@@ -219,10 +224,33 @@
         }
 
         function renderFired(data) {
-            firedContainer.html(data.length === 0 ? "<p class='text-gray-400'>No squeezes have fired recently.</p>" : "");
-            const cells = firedContainer.selectAll(".cell").data(data, d => d.name);
-            cells.exit().remove();
-            renderCells(cells, 'fired');
+            if (data.length === 0) {
+                firedContainer.html("<p class='col-span-full text-gray-400 text-center py-4'>No squeezes have fired with increased volatility recently.</p>");
+                return;
+            } else {
+                 firedContainer.html("");
+            }
+
+            const tfOrder = ['Monthly', 'Weekly', '4H', '2H', '1H', '30m', '15m', '5m', '1m', 'Daily'];
+            const groupedData = d3.group(data, d => d.fired_timeframe);
+            const sortedGroups = Array.from(groupedData.entries()).sort((a, b) => tfOrder.indexOf(a[0]) - tfOrder.indexOf(b[0]));
+
+            const groups = firedContainer.selectAll('.timeframe-box').data(sortedGroups, d => d[0]);
+            groups.exit().remove();
+
+            const enterGroups = groups.enter().append('div').attr('class', 'timeframe-box');
+            enterGroups.append('h2').attr('class', 'timeframe-title');
+            enterGroups.append('div').attr('class', 'grid-container');
+
+            const updateGroups = enterGroups.merge(groups);
+            updateGroups.select('h2').text(d => `Fired on ${d[0]}`);
+
+            updateGroups.each(function([tf, stocks]) {
+                const sortedStocks = stocks.sort((a,b) => b.HeatmapScore - a.HeatmapScore);
+                const cells = d3.select(this).select('.grid-container').selectAll('.cell').data(sortedStocks, d => `${d.name}-${d.fired_timeframe}`);
+                cells.exit().remove();
+                renderCells(cells, 'fired');
+            });
         }
 
         function renderInSqueeze(data) {
@@ -237,23 +265,22 @@
             const enterGroups = groups.enter().append('div').attr('class', 'timeframe-group');
 
             const title = enterGroups.append('h2').attr('class', 'timeframe-title');
-            title.append('span').attr('class', 'arrow').html('&#9662;'); // Down arrow
-            title.append('span').attr('class', 'title-text');
+            title.append('span').attr('class', 'arrow').html('&#9662;');
+            title.append('span').text(d => d[0]);
 
             const momentumCols = enterGroups.append('div').attr('class', 'momentum-columns');
             momentumCols.append('div').attr('class', 'bullish-col').html("<div class='grid-container'></div>");
             momentumCols.append('div').attr('class', 'bearish-col').html("<div class='grid-container'></div>");
 
             const updateGroups = enterGroups.merge(groups);
-            updateGroups.select('.timeframe-title .title-text').text(d => d[0]);
+            updateGroups.select('.timeframe-title span:last-child').text(d => d[0]);
 
             updateGroups.select('.timeframe-title').on('click', function() {
                 const group = d3.select(this.parentNode);
                 const momentumColumns = group.select('.momentum-columns');
                 const isCollapsed = momentumColumns.style('display') === 'none';
-
-                momentumColumns.style('display', isCollapsed ? 'grid' : 'none');
-                group.select('.timeframe-title').classed('collapsed', !isCollapsed);
+                momentumColumns.style('display', isCollapsed ? 'flex' : 'none');
+                d3.select(this).classed('collapsed', !isCollapsed);
             });
 
             updateGroups.each(function([tf, stocks]) {
@@ -292,15 +319,14 @@
         }
 
         function setupControls() {
-            // Collapsible sections
             d3.selectAll('.section-title').on('click', function() {
-                const container = d3.select(this.parentNode).select('.grid-container, #in-squeeze-container');
+                const wrapper = d3.select(this.parentNode);
+                const container = wrapper.select('#fired-container, #in-squeeze-container');
                 const isCollapsed = container.style('display') === 'none';
-                container.style('display', isCollapsed ? null : 'none');
+                container.style('display', isCollapsed ? 'grid' : 'none');
                 d3.select(this).classed('collapsed', !isCollapsed);
             });
 
-            // Filter buttons
             const filterButtons = d3.selectAll('.filter-btn');
             filterButtons.on('click', function() {
                 currentStrengthFilter = d3.select(this).attr('data-strength');
@@ -319,7 +345,7 @@
                 ]);
 
                 fullInSqueezeData = inSqueezeData;
-                renderFired(firedData.sort((a, b) => b.value - a.value));
+                renderFired(firedData);
                 applyFiltersAndRender();
 
             } catch (error) {

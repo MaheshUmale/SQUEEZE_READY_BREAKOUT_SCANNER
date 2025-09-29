@@ -1,0 +1,112 @@
+[
+    {
+        "name": "NSE:SWIGGY",
+        "value": -2.816690909090909,
+        "count": 2,
+        "rvol": 0.40834545454545457,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ASWIGGY",
+        "logo": "https://s3-symbol-logo.tradingview.com/swiggy-ltd.svg",
+        "momentum": "Bearish",
+        "highest_tf": "30m",
+        "squeeze_strength": "Regular"
+    },
+    {
+        "name": "NSE:VEDL",
+        "value": 6.560729816506954,
+        "count": 5,
+        "rvol": 0.31214596330139066,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AVEDL",
+        "logo": "https://s3-symbol-logo.tradingview.com/steel-dynamics.svg",
+        "momentum": "Bullish",
+        "highest_tf": "Weekly",
+        "squeeze_strength": "VERY STRONG"
+    },
+    {
+        "name": "NSE:ASHOKLEY",
+        "value": 4.2866444446811,
+        "count": 3,
+        "rvol": 0.42888148156036676,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AASHOKLEY",
+        "logo": "https://s3-symbol-logo.tradingview.com/ashok-leyland.svg",
+        "momentum": "Bullish",
+        "highest_tf": "Monthly",
+        "squeeze_strength": "Regular"
+    },
+    {
+        "name": "NSE:BHARATGEAR",
+        "value": 11.572777346118642,
+        "count": 3,
+        "rvol": 2.857592448706214,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ABHARATGEAR",
+        "logo": "https://s3-symbol-logo.tradingview.com/bharat-gears-ltd.svg",
+        "momentum": "Bullish",
+        "highest_tf": "Monthly",
+        "squeeze_strength": "Regular"
+    },
+    {
+        "name": "NSE:PETRONET",
+        "value": -4.546148585988217,
+        "count": 3,
+        "rvol": 0.515382861996072,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3APETRONET",
+        "logo": "https://s3-symbol-logo.tradingview.com/petronet-lng.svg",
+        "momentum": "Bearish",
+        "highest_tf": "5m",
+        "squeeze_strength": "STRONG"
+    },
+    {
+        "name": "NSE:REDINGTON",
+        "value": 3.1313747302319004,
+        "count": 1,
+        "rvol": 2.1313747302319004,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AREDINGTON",
+        "logo": "https://s3-symbol-logo.tradingview.com/redington-india.svg",
+        "momentum": "Bullish",
+        "highest_tf": "Monthly",
+        "squeeze_strength": "STRONG"
+    },
+    {
+        "name": "NSE:VBL",
+        "value": -3.9473219896050504,
+        "count": 3,
+        "rvol": 0.31577399653501675,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AVBL",
+        "logo": "https://s3-symbol-logo.tradingview.com/varun-beverages-ltd.svg",
+        "momentum": "Bearish",
+        "highest_tf": "Weekly",
+        "squeeze_strength": "Regular"
+    },
+    {
+        "name": "NSE:NLCINDIA",
+        "value": 7.751114603128198,
+        "count": 3,
+        "rvol": 1.5837048677093992,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ANLCINDIA",
+        "logo": "https://s3-symbol-logo.tradingview.com/nlc-india.svg",
+        "momentum": "Bullish",
+        "highest_tf": "Monthly",
+        "squeeze_strength": "VERY STRONG"
+    },
+    {
+        "name": "NSE:NBCC",
+        "value": 3.1795054855524443,
+        "count": 1,
+        "rvol": 2.1795054855524443,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ANBCC",
+        "logo": "https://s3-symbol-logo.tradingview.com/nbcc-india.svg",
+        "momentum": "Bullish",
+        "highest_tf": "Monthly",
+        "squeeze_strength": "Regular"
+    },
+    {
+        "name": "NSE:OLAELEC",
+        "value": -7.770104845511124,
+        "count": 2,
+        "rvol": 2.885052422755562,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AOLAELEC",
+        "logo": "https://s3-symbol-logo.tradingview.com/ola-electric-mobility-ltd.svg",
+        "momentum": "Bearish",
+        "highest_tf": "30m",
+        "squeeze_strength": "Regular"
+    }
+]
