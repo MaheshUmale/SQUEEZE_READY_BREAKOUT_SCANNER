@@ -2,18 +2,59 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Most Recently Fired Squeezes</title>
+    <title>Recently Fired Squeezes</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         body { font-family: sans-serif; background-color: #111827; color: white; }
-        .fired-item {
-            border: 1px solid #374151;
-            transition: background-color 0.2s;
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            gap: 6px;
         }
-        .fired-item:hover {
-            background-color: #1f2937;
+        .timeframe-group { margin-bottom: 2rem; }
+        .timeframe-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: #9ca3af;
+        }
+        .cell {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 4px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-align: center;
+            height: 75px;
+            transition: transform 0.2s, background-color 0.2s;
+            border: 1px solid #374151;
+        }
+        .cell:hover {
+            transform: scale(1.05);
+            border-color: #9ca3af;
+        }
+        .stock-logo { width: 24px; height: 24px; margin-bottom: 3px; }
+        .stock-ticker { font-weight: 600; font-size: 11px; }
+        .stock-info { font-size: 9px; color: #d1d5db; }
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            padding: 8px;
+            font: 12px sans-serif;
+            background: #1f2937;
+            border: 1px solid #4b5563;
+            border-radius: 8px;
+            pointer-events: none;
+            opacity: 0;
+            color: white;
         }
     </style>
 </head>
@@ -29,94 +70,97 @@
             </nav>
         </header>
 
-        <div id="fired-list" class="space-y-4">
-            <!-- Fired squeezes will be dynamically inserted here -->
+        <div id="fired-container">
+            <!-- Fired squeezes will be dynamically inserted here as a heatmap -->
         </div>
+        <div class="tooltip"></div>
     </div>
 
     <script>
-        const firedListContainer = d3.select("#fired-list");
+        const firedContainer = d3.select("#fired-container");
+        const tooltip = d3.select(".tooltip");
+
+        const rvolDomain = [0, 5];
+        const bullishColor = d3.scaleLinear().domain(rvolDomain).range(["#064e3b", "#10b981"]).clamp(true);
+        const bearishColor = d3.scaleLinear().domain(rvolDomain).range(["#7f1d1d", "#ef4444"]).clamp(true);
 
         function getCellColor(d) {
-            if (d.momentum === 'Bullish') return "#10b981"; // green-500
-            if (d.momentum === 'Bearish') return "#ef4444"; // red-500
-            return "#6b7280"; // gray-500
+            if (d.momentum === 'Bullish') return bullishColor(d.rvol);
+            if (d.momentum === 'Bearish') return bearishColor(d.rvol);
+            return "#374151"; // gray-700
         }
 
-        function renderFiredList(data) {
-            if (data.length === 0) {
-                firedListContainer.html("<p class='text-gray-400 text-center py-8'>No squeezes have fired recently. Waiting for data...</p>");
-                return;
-            }
+        function getTooltipHtml(d) {
+            const prevVol = d.previous_volatility.toFixed(2);
+            const currVol = d.current_volatility.toFixed(2);
+            return `<strong>${d.name.replace('NSE:', '')}</strong><br/>` +
+                   `Fired on ${d.fired_timeframe}<br/>` +
+                   `Momentum: <span style="color: ${getCellColor(d)};">${d.momentum}</span><br/>` +
+                   `Volatility: <strong style="color: #10b981;">${prevVol}% &rarr; ${currVol}%</strong><br/>` +
+                   `RVOL: ${d.rvol.toFixed(2)}`;
+        }
 
-            const items = firedListContainer.selectAll(".fired-item")
-                .data(data, d => `${d.name}-${d.fired_timeframe}`);
+        function renderCells(selection) {
+            const enterCells = selection.enter().append("div").attr("class", "cell")
+                .on("click", (event, d) => window.open(d.url, "_blank"))
+                .on("mouseover", function(event, d) {
+                    tooltip.transition().duration(200).style("opacity", .9);
+                    tooltip.html(getTooltipHtml(d)).style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
 
-            items.exit().remove();
+            enterCells.append("img").attr("class", "stock-logo");
+            enterCells.append("div").attr("class", "stock-ticker");
+            enterCells.append("div").attr("class", "stock-info");
 
-            const enterItems = items.enter().append("a")
-                .attr("href", d => d.url)
-                .attr("target", "_blank")
-                .attr("class", "fired-item p-4 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center transition duration-200");
+            const updateCells = enterCells.merge(selection);
+            updateCells.style("background-color", d => getCellColor(d));
+            updateCells.select(".stock-logo").attr("src", d => d.logo).style("display", d => d.logo ? 'block' : 'none');
+            updateCells.select(".stock-ticker").text(d => d.name.replace('NSE:', ''));
+            updateCells.select(".stock-info").text(d => `RVOL: ${d.rvol.toFixed(2)}`);
+        }
 
-            const leftSide = enterItems.append("div")
-                .attr("class", "flex items-center mb-2 sm:mb-0");
+        function renderFiredHeatmap(data) {
+            firedContainer.html(data.length === 0 ? "<p class='text-gray-400 text-center py-8'>No squeezes have fired with increased volatility recently.</p>" : "");
 
-            leftSide.append("img")
-                .attr("src", d => d.logo)
-                .attr("class", "w-8 h-8 mr-4 rounded-full")
-                .style("display", d => d.logo ? 'block' : 'none');
+            const tfOrder = ['Monthly', 'Weekly', '4H', '2H', '1H', '30m', '15m', '5m', '1m', 'Daily'];
+            const groupedData = d3.group(data, d => d.fired_timeframe);
+            const sortedGroups = Array.from(groupedData.entries()).sort((a, b) => tfOrder.indexOf(a[0]) - tfOrder.indexOf(b[0]));
 
-            const tickerInfo = leftSide.append("div");
-            tickerInfo.append("div")
-                .attr("class", "font-bold text-lg")
-                .text(d => d.name.replace('NSE:', ''));
-            tickerInfo.append("div")
-                .attr("class", "text-sm text-gray-400")
-                .text(d => `Fired on ${d.fired_timeframe}`);
+            const groups = firedContainer.selectAll('.timeframe-group').data(sortedGroups, d => d[0]);
+            groups.exit().remove();
 
-            const rightSide = enterItems.append("div")
-                .attr("class", "flex flex-col sm:text-right w-full sm:w-auto");
+            const enterGroups = groups.enter().append('div').attr('class', 'timeframe-group');
+            enterGroups.append('h2').attr('class', 'timeframe-title').text(d => `Fired on ${d[0]}`);
+            enterGroups.append('div').attr('class', 'grid-container');
 
-            const momentumText = rightSide.append("div")
-                .attr("class", "text-md font-semibold");
-            momentumText.append("span").text("Momentum: ");
-            momentumText.append("span")
-                .style("color", d => getCellColor(d))
-                .text(d => d.momentum);
+            const updateGroups = enterGroups.merge(groups);
+            updateGroups.select('h2').text(d => `Fired on ${d[0]}`);
 
-            rightSide.append("div")
-                .attr("class", "text-sm text-gray-300")
-                .html(d => `Vol: <span class="font-semibold">${d.previous_volatility.toFixed(2)}% &rarr; ${d.current_volatility.toFixed(2)}%</span>`);
-
-
-            const updateItems = enterItems.merge(items);
-            // You can add update logic here if needed, e.g., to flash color on update
+            updateGroups.each(function([tf, stocks]) {
+                const sortedStocks = stocks.sort((a,b) => b.value - a.value);
+                const cells = d3.select(this).select('.grid-container').selectAll('.cell').data(sortedStocks, d => d.name);
+                cells.exit().remove();
+                renderCells(cells);
+            });
         }
 
         let existingFired = [];
-
         async function loadData() {
             try {
                 const firedData = await d3.json(`treemap_data_fired.json?t=${new Date().getTime()}`);
-
-                // Only update if the data has changed
                 if (JSON.stringify(firedData) !== JSON.stringify(existingFired)) {
                     existingFired = firedData;
-                    // Sort by most recent first, assuming higher score is more recent/important
-                    const sortedData = firedData.sort((a, b) => b.value - a.value);
-                    renderFiredList(sortedData);
+                    renderFiredHeatmap(firedData);
                 }
-
             } catch (error) {
                 console.error("Failed to load data:", error);
-                firedListContainer.html("<p class='text-center text-red-500'>Could not load 'Fired' data. Check if the backend script is running.</p>");
+                firedContainer.html("<p class='text-center text-red-500'>Could not load 'Fired' data.</p>");
             }
         }
 
-        // Initial load and set interval
         loadData();
-        setInterval(loadData, 30000); // Poll every 30 seconds
+        setInterval(loadData, 30000);
     </script>
 </body>
 </html>
