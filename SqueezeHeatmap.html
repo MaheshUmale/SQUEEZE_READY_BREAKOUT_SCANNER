@@ -177,7 +177,6 @@
         const tooltip = d3.select(".tooltip");
         let refreshInterval;
         let fullInSqueezeData = [];
-        let currentStrengthFilter = 'ALL';
 
         // --- Color Scales ---
         const rvolDomain = [0, 5];
@@ -201,7 +200,7 @@
                 const prevVol = d.previous_volatility.toFixed(2);
                 const currVol = d.current_volatility.toFixed(2);
                 squeezeHtml = `Fired on ${d.fired_timeframe}<br/>` +
-                              `Volatility: <strong style="color: #10b981;">${prevVol}% &rarr; ${currVol}%</strong><br/>`;
+                              `Volatility: <strong style="color: #10b981;">${prevVol} &rarr; ${currVol}</strong><br/>`;
             }
             return `<strong>${d.name.replace('NSE:', '')}</strong><br/>` + squeezeHtml + momentumHtml + `RVOL: ${d.rvol.toFixed(2)}`;
         }
@@ -317,8 +316,78 @@
             });
         }
 
-        function applyFiltersAndRender() {
-            renderInSqueeze(fullInSqueezeData);
+        function setupControls() {
+            // Main section toggles
+            d3.selectAll('.section-title').on('click', function() {
+                const wrapper = d3.select(this.parentNode);
+                const container = wrapper.select('#fired-container, #in-squeeze-container');
+                if (container.empty()) return;
+
+                const isCollapsed = container.style('display') === 'none';
+
+                let displayStyle = 'block';
+                if (container.attr('id') === 'fired-container') {
+                    displayStyle = 'grid';
+                }
+
+                container.style('display', isCollapsed ? displayStyle : 'none');
+                d3.select(this).classed('collapsed', !isCollapsed);
+            });
+        }
+
+        function setupControls() {
+            // Main section toggles
+            d3.selectAll('.section-title').on('click', function() {
+                const wrapper = d3.select(this.parentNode);
+                const container = wrapper.select('#fired-container, #in-squeeze-container');
+                if (container.empty()) return;
+
+                const isCollapsed = container.style('display') === 'none';
+
+                let displayStyle = 'block';
+                if (container.attr('id') === 'fired-container') {
+                    displayStyle = 'grid';
+                }
+
+                container.style('display', isCollapsed ? displayStyle : 'none');
+                d3.select(this).classed('collapsed', !isCollapsed);
+            });
+        }
+
+        function setupControls() {
+            d3.selectAll('.section-title').on('click', function() {
+                const wrapper = d3.select(this.parentNode);
+                const container = wrapper.select('#fired-container, #in-squeeze-container');
+                if (container.empty()) return;
+
+                const isCollapsed = container.style('display') === 'none';
+
+                let displayStyle = 'block';
+                if (container.attr('id') === 'fired-container') {
+                    displayStyle = 'grid';
+                }
+
+                container.style('display', isCollapsed ? displayStyle : 'none');
+                d3.select(this).classed('collapsed', !isCollapsed);
+            });
+        }
+
+        function setupControls() {
+            d3.selectAll('.section-title').on('click', function() {
+                const wrapper = d3.select(this.parentNode);
+                const container = wrapper.select('#fired-container, #in-squeeze-container');
+                if (container.empty()) return;
+
+                const isCollapsed = container.style('display') === 'none';
+
+                let displayStyle = 'block';
+                if (container.attr('id') === 'fired-container') {
+                    displayStyle = 'grid';
+                }
+
+                container.style('display', isCollapsed ? displayStyle : 'none');
+                d3.select(this).classed('collapsed', !isCollapsed);
+            });
         }
 
         async function loadData() {
@@ -330,7 +399,7 @@
 
                 fullInSqueezeData = inSqueezeData;
                 renderFired(firedData);
-                applyFiltersAndRender();
+                renderInSqueeze(fullInSqueezeData);
 
             } catch (error) {
                 console.error("Failed to load data:", error);
@@ -341,6 +410,7 @@
 
         // Initial setup
         loadData();
+        setupControls();
         refreshInterval = setInterval(loadData, 120000);
     </script>
 </body>
