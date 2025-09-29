@@ -2,18 +2,70 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Newly Formed Squeezes</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         body { font-family: sans-serif; background-color: #111827; color: white; }
-        .formed-item {
-            border: 1px solid #374151;
-            transition: background-color 0.2s;
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            gap: 6px;
         }
-        .formed-item:hover {
-            background-color: #1f2937;
+        .timeframe-group { margin-bottom: 2rem; }
+        .timeframe-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: #9ca3af;
+        }
+        .cell {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 4px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-align: center;
+            height: 75px;
+            transition: transform 0.2s, background-color 0.2s;
+            border: 1px solid #374151;
+        }
+        .cell:hover {
+            transform: scale(1.05);
+            border-color: #9ca3af;
+        }
+        .stock-logo { width: 24px; height: 24px; margin-bottom: 3px; }
+        .stock-ticker { font-weight: 600; font-size: 11px; }
+        .stock-info { font-size: 9px; color: #d1d5db; }
+        .squeeze-badge {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            font-size: 9px;
+            font-weight: bold;
+            padding: 1px 4px;
+            border-radius: 4px;
+        }
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            padding: 8px;
+            font: 12px sans-serif;
+            background: #1f2937;
+            border: 1px solid #4b5563;
+            border-radius: 8px;
+            pointer-events: none;
+            opacity: 0;
+            color: white;
         }
     </style>
 </head>
@@ -29,89 +81,96 @@
             </nav>
         </header>
 
-        <div id="formed-list" class="space-y-4">
-            <!-- Newly formed squeezes will be dynamically inserted here -->
+        <div id="formed-container">
+            <!-- Newly formed squeezes will be dynamically inserted here as a heatmap -->
         </div>
+        <div class="tooltip"></div>
     </div>
 
     <script>
-        const formedListContainer = d3.select("#formed-list");
+        const formedContainer = d3.select("#formed-container");
+        const tooltip = d3.select(".tooltip");
+
+        const rvolDomain = [0, 5];
+        const bullishColor = d3.scaleLinear().domain(rvolDomain).range(["#064e3b", "#10b981"]).clamp(true);
+        const bearishColor = d3.scaleLinear().domain(rvolDomain).range(["#7f1d1d", "#ef4444"]).clamp(true);
 
         function getCellColor(d) {
-            if (d.momentum === 'Bullish') return "#10b981"; // green-500
-            if (d.momentum === 'Bearish') return "#ef4444"; // red-500
-            return "#6b7280"; // gray-500
+            if (d.momentum === 'Bullish') return bullishColor(d.rvol);
+            if (d.momentum === 'Bearish') return bearishColor(d.rvol);
+            return "#374151"; // gray-700
         }
 
-        function renderFormedList(data) {
-            if (data.length === 0) {
-                formedListContainer.html("<p class='text-gray-400 text-center py-8'>No new squeezes have formed recently. Waiting for data...</p>");
-                return;
-            }
+        function getTooltipHtml(d) {
+            const strengthHtml = d.squeeze_strength !== 'N/A' ? ` (${d.squeeze_strength})` : '';
+            return `<strong>${d.name.replace('NSE:', '')}</strong><br/>` +
+                   `Squeeze on ${d.count} TFs (${d.highest_tf})${strengthHtml}<br/>` +
+                   `Momentum: <span style="color: ${getCellColor(d)};">${d.momentum}</span><br/>` +
+                   `RVOL: ${d.rvol.toFixed(2)}`;
+        }
 
-            const items = formedListContainer.selectAll(".formed-item")
-                .data(data, d => `${d.name}-${d.highest_tf}`);
+        function renderCells(selection) {
+            const enterCells = selection.enter().append("div").attr("class", "cell")
+                .on("click", (event, d) => window.open(d.url, "_blank"))
+                .on("mouseover", function(event, d) {
+                    tooltip.transition().duration(200).style("opacity", .9);
+                    tooltip.html(getTooltipHtml(d)).style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
 
-            items.exit().remove();
+            enterCells.append("div").attr("class", "squeeze-badge").text(d => d.count);
+            enterCells.append("img").attr("class", "stock-logo");
+            enterCells.append("div").attr("class", "stock-ticker");
+            enterCells.append("div").attr("class", "stock-info");
 
-            const enterItems = items.enter().append("a")
-                .attr("href", d => d.url)
-                .attr("target", "_blank")
-                .attr("class", "formed-item p-4 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center transition duration-200");
+            const updateCells = enterCells.merge(selection);
+            updateCells.style("background-color", d => getCellColor(d));
+            updateCells.select(".stock-logo").attr("src", d => d.logo).style("display", d => d.logo ? 'block' : 'none');
+            updateCells.select(".stock-ticker").text(d => d.name.replace('NSE:', ''));
+            updateCells.select(".stock-info").text(d => `RVOL: ${d.rvol.toFixed(2)}`);
+        }
 
-            const leftSide = enterItems.append("div")
-                .attr("class", "flex items-center mb-2 sm:mb-0");
+        function renderFormedHeatmap(data) {
+            formedContainer.html(data.length === 0 ? "<p class='text-gray-400 text-center py-8'>No new squeezes have formed recently. Waiting for data...</p>" : "");
 
-            leftSide.append("img")
-                .attr("src", d => d.logo)
-                .attr("class", "w-8 h-8 mr-4 rounded-full")
-                .style("display", d => d.logo ? 'block' : 'none');
+            const tfOrder = ['Monthly', 'Weekly', '4H', '2H', '1H', '30m', '15m', '5m', '1m', 'Daily', 'Unknown'];
+            const groupedData = d3.group(data, d => d.highest_tf);
+            const sortedGroups = Array.from(groupedData.entries()).sort((a, b) => tfOrder.indexOf(a[0]) - tfOrder.indexOf(b[0]));
 
-            const tickerInfo = leftSide.append("div");
-            tickerInfo.append("div")
-                .attr("class", "font-bold text-lg")
-                .text(d => d.name.replace('NSE:', ''));
-            tickerInfo.append("div")
-                .attr("class", "text-sm text-gray-400")
-                .text(d => `Squeeze formed on ${d.highest_tf}`);
+            const groups = formedContainer.selectAll('.timeframe-group').data(sortedGroups, d => d[0]);
+            groups.exit().remove();
 
-            const rightSide = enterItems.append("div")
-                .attr("class", "flex flex-col sm:text-right w-full sm:w-auto");
+            const enterGroups = groups.enter().append('div').attr('class', 'timeframe-group');
+            enterGroups.append('h2').attr('class', 'timeframe-title').text(d => `Formed on ${d[0]}`);
+            enterGroups.append('div').attr('class', 'grid-container');
 
-            const momentumText = rightSide.append("div")
-                .attr("class", "text-md font-semibold");
-            momentumText.append("span").text("Momentum: ");
-            momentumText.append("span")
-                .style("color", d => getCellColor(d))
-                .text(d => d.momentum);
+            const updateGroups = enterGroups.merge(groups);
+            updateGroups.select('h2').text(d => `Formed on ${d[0]}`);
 
-            rightSide.append("div")
-                .attr("class", "text-sm text-gray-300")
-                .html(d => `RVOL: <span class="font-semibold">${d.rvol.toFixed(2)}</span>`);
-
-            const updateItems = enterItems.merge(items);
+            updateGroups.each(function([tf, stocks]) {
+                const sortedStocks = stocks.sort((a,b) => b.value - a.value);
+                const cells = d3.select(this).select('.grid-container').selectAll('.cell').data(sortedStocks, d => d.name);
+                cells.exit().remove();
+                renderCells(cells);
+            });
         }
 
         let existingFormed = [];
-
         async function loadData() {
             try {
                 const formedData = await d3.json(`treemap_data_formed.json?t=${new Date().getTime()}`);
-
                 if (JSON.stringify(formedData) !== JSON.stringify(existingFormed)) {
                     existingFormed = formedData;
-                    const sortedData = formedData.sort((a, b) => b.value - a.value);
-                    renderFormedList(sortedData);
+                    renderFormedHeatmap(formedData);
                 }
-
             } catch (error) {
                 console.error("Failed to load data:", error);
-                formedListContainer.html("<p class='text-center text-red-500'>Could not load 'Formed' data. Check if the backend script is running.</p>");
+                formedContainer.html("<p class='text-center text-red-500'>Could not load 'Formed' data.</p>");
             }
         }
 
         loadData();
-        setInterval(loadData, 30000); // Poll every 30 seconds
+        setInterval(loadData, 30000);
     </script>
 </body>
 </html>
