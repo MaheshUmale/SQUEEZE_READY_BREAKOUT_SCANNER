@@ -139,12 +139,6 @@
             </nav>
         </header>
 
-        <div id="filter-controls" class="flex flex-wrap justify-center items-center my-4 gap-2">
-            <span class="text-sm font-medium text-gray-400 mr-2">Strength:</span>
-            <button data-strength="ALL" class="filter-btn px-3 py-1 rounded-md text-sm font-medium transition">ALL</button>
-            <button data-strength="STRONG" class="filter-btn px-3 py-1 rounded-md text-sm font-medium transition">STRONG</button>
-            <button data-strength="VERY STRONG" class="filter-btn px-3 py-1 rounded-md text-sm font-medium transition">VERY STRONG</button>
-        </div>
 
         <div id="heatmap-container" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6"></div>
         <div class="tooltip"></div>
@@ -226,29 +220,7 @@
         }
 
         function applyFiltersAndRender() {
-            let filteredData = fullInSqueezeData;
-            if (currentStrengthFilter !== 'ALL') {
-                const strengthLevels = {
-                    'STRONG': ['STRONG', 'VERY STRONG'],
-                    'VERY STRONG': ['VERY STRONG']
-                };
-                const activeLevels = strengthLevels[currentStrengthFilter];
-                if (activeLevels) {
-                    filteredData = fullInSqueezeData.filter(d => activeLevels.includes(d.squeeze_strength));
-                }
-            }
-            renderHeatmap(filteredData);
-        }
-
-        function setupControls() {
-            const filterButtons = d3.selectAll('.filter-btn');
-            filterButtons.on('click', function() {
-                currentStrengthFilter = d3.select(this).attr('data-strength');
-                filterButtons.classed('active', false);
-                d3.select(this).classed('active', true);
-                applyFiltersAndRender();
-            });
-            d3.select(`.filter-btn[data-strength="${currentStrengthFilter}"]`).classed('active', true);
+            renderHeatmap(fullInSqueezeData);
         }
 
         async function loadData() {
@@ -265,7 +237,6 @@
 
         // Initial setup
         loadData();
-        setupControls();
         refreshInterval = setInterval(loadData, 120000);
     </script>
 </body>

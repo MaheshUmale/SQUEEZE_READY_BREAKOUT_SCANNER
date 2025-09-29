@@ -1,1 +1,156 @@
-[]
+[
+    {
+        "name": "NSE:HEROMOTOCO",
+        "value": -9.371802091782872,
+        "count": 5,
+        "rvol": 0.8743604183565744,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AHEROMOTOCO",
+        "logo": "https://s3-symbol-logo.tradingview.com/hero-motocorp.svg",
+        "momentum": "Bearish",
+        "highest_tf": "4H",
+        "squeeze_strength": "STRONG"
+    },
+    {
+        "name": "NSE:LT",
+        "value": 7.195356399557561,
+        "count": 4,
+        "rvol": 0.7988390998893901,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ALT",
+        "logo": "https://s3-symbol-logo.tradingview.com/larsen-and-toubro.svg",
+        "momentum": "Bullish",
+        "highest_tf": "Monthly",
+        "squeeze_strength": "VERY STRONG"
+    },
+    {
+        "name": "NSE:ENRIN",
+        "value": -14.767430867848809,
+        "count": 8,
+        "rvol": 0.8459288584811011,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AENRIN",
+        "logo": "https://s3-symbol-logo.tradingview.com/siemens-energy.svg",
+        "momentum": "Bearish",
+        "highest_tf": "4H",
+        "squeeze_strength": "STRONG"
+    },
+    {
+        "name": "NSE:TATAMOTORS",
+        "value": -6.050781940907093,
+        "count": 3,
+        "rvol": 1.016927313635698,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ATATAMOTORS",
+        "logo": "https://s3-symbol-logo.tradingview.com/tata.svg",
+        "momentum": "Bearish",
+        "highest_tf": "Weekly",
+        "squeeze_strength": "STRONG"
+    },
+    {
+        "name": "NSE:SWIGGY",
+        "value": -8.653142107228408,
+        "count": 5,
+        "rvol": 0.7306284214456816,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ASWIGGY",
+        "logo": "https://s3-symbol-logo.tradingview.com/swiggy-ltd.svg",
+        "momentum": "Bearish",
+        "highest_tf": "30m",
+        "squeeze_strength": "STRONG"
+    },
+    {
+        "name": "NSE:ITC",
+        "value": -5.963185715649127,
+        "count": 3,
+        "rvol": 0.9877285718830422,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AITC",
+        "logo": "https://s3-symbol-logo.tradingview.com/itc.svg",
+        "momentum": "Bearish",
+        "highest_tf": "Weekly",
+        "squeeze_strength": "STRONG"
+    },
+    {
+        "name": "NSE:HINDZINC",
+        "value": 9.792445427508602,
+        "count": 5,
+        "rvol": 0.9584890855017203,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AHINDZINC",
+        "logo": "https://s3-symbol-logo.tradingview.com/hindustan-zinc.svg",
+        "momentum": "Bullish",
+        "highest_tf": "4H",
+        "squeeze_strength": "STRONG"
+    },
+    {
+        "name": "NSE:ATLANTAELE",
+        "value": 1.292544043136708,
+        "count": 1,
+        "rvol": 1.585088086273416,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AATLANTAELE",
+        "logo": "",
+        "momentum": "Neutral",
+        "highest_tf": "15m",
+        "squeeze_strength": "VERY STRONG"
+    },
+    {
+        "name": "NSE:SUNPHARMA",
+        "value": -3.7788535027155046,
+        "count": 2,
+        "rvol": 0.8894267513577523,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ASUNPHARMA",
+        "logo": "https://s3-symbol-logo.tradingview.com/sun-pharmaceutical.svg",
+        "momentum": "Bearish",
+        "highest_tf": "Weekly",
+        "squeeze_strength": "STRONG"
+    },
+    {
+        "name": "NSE:VEDL",
+        "value": 8.140910072233435,
+        "count": 5,
+        "rvol": 0.628182014446687,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3AVEDL",
+        "logo": "https://s3-symbol-logo.tradingview.com/steel-dynamics.svg",
+        "momentum": "Bullish",
+        "highest_tf": "Weekly",
+        "squeeze_strength": "VERY STRONG"
+    },
+    {
+        "name": "NSE:PARADEEP",
+        "value": 1.383206020172734,
+        "count": 1,
+        "rvol": 0.38320602017273414,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3APARADEEP",
+        "logo": "https://s3-symbol-logo.tradingview.com/paradeep-phosphates-limited.svg",
+        "momentum": "Bullish",
+        "highest_tf": "15m",
+        "squeeze_strength": "VERY STRONG"
+    },
+    {
+        "name": "NSE:TITAN",
+        "value": -3.8375001663438013,
+        "count": 2,
+        "rvol": 0.9187500831719007,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ATITAN",
+        "logo": "https://s3-symbol-logo.tradingview.com/titan-company.svg",
+        "momentum": "Bearish",
+        "highest_tf": "Monthly",
+        "squeeze_strength": "STRONG"
+    },
+    {
+        "name": "NSE:DRREDDY",
+        "value": -6.017794107998164,
+        "count": 3,
+        "rvol": 1.005931369332721,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3ADRREDDY",
+        "logo": "https://s3-symbol-logo.tradingview.com/dr-reddys.svg",
+        "momentum": "Bearish",
+        "highest_tf": "Monthly",
+        "squeeze_strength": "STRONG"
+    },
+    {
+        "name": "NSE:POWERGRID",
+        "value": -5.70344674222684,
+        "count": 3,
+        "rvol": 0.9011489140756129,
+        "url": "https://in.tradingview.com/chart/N8zfIJVK/?symbol=NSE%3APOWERGRID",
+        "logo": "https://s3-symbol-logo.tradingview.com/power-grid.svg",
+        "momentum": "Bearish",
+        "highest_tf": "Weekly",
+        "squeeze_strength": "STRONG"
+    }
+]
