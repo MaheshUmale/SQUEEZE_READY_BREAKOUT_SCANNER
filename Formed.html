@@ -11,17 +11,24 @@
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         body { font-family: sans-serif; background-color: #111827; color: white; }
+        .timeframe-box {
+            background-color: #1f2937; /* gray-800 */
+            border-radius: 8px;
+            padding: 1rem;
+            border: 1px solid #374151; /* gray-700 */
+        }
+        .timeframe-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #4b5563;
+            color: #d1d5db;
+        }
         .grid-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
             gap: 6px;
-        }
-        .timeframe-group { margin-bottom: 2rem; }
-        .timeframe-title {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 0.75rem;
-            color: #9ca3af;
         }
         .cell {
             position: relative;
@@ -81,8 +88,8 @@
             </nav>
         </header>
 
-        <div id="formed-container">
-            <!-- Newly formed squeezes will be dynamically inserted here as a heatmap -->
+        <div id="formed-container" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            <!-- Timeframe boxes will be dynamically inserted here -->
         </div>
         <div class="tooltip"></div>
     </div>
@@ -131,17 +138,20 @@
         }
 
         function renderFormedHeatmap(data) {
-            formedContainer.html(data.length === 0 ? "<p class='text-gray-400 text-center py-8'>No new squeezes have formed recently. Waiting for data...</p>" : "");
+            if (data.length === 0) {
+                formedContainer.html("<p class='text-gray-400 text-center py-8'>No new squeezes have formed recently. Waiting for data...</p>");
+                return;
+            }
 
             const tfOrder = ['Monthly', 'Weekly', '4H', '2H', '1H', '30m', '15m', '5m', '1m', 'Daily', 'Unknown'];
             const groupedData = d3.group(data, d => d.highest_tf);
             const sortedGroups = Array.from(groupedData.entries()).sort((a, b) => tfOrder.indexOf(a[0]) - tfOrder.indexOf(b[0]));
 
-            const groups = formedContainer.selectAll('.timeframe-group').data(sortedGroups, d => d[0]);
+            const groups = formedContainer.selectAll('.timeframe-box').data(sortedGroups, d => d[0]);
             groups.exit().remove();
 
-            const enterGroups = groups.enter().append('div').attr('class', 'timeframe-group');
-            enterGroups.append('h2').attr('class', 'timeframe-title').text(d => `Formed on ${d[0]}`);
+            const enterGroups = groups.enter().append('div').attr('class', 'timeframe-box');
+            enterGroups.append('h2').attr('class', 'timeframe-title');
             enterGroups.append('div').attr('class', 'grid-container');
 
             const updateGroups = enterGroups.merge(groups);
