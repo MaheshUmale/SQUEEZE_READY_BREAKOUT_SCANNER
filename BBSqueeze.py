@@ -165,6 +165,34 @@ def get_squeeze_strength(row):
         return "N/A"
 
 
+def get_fired_breakout_direction(row, fired_tf_name, tf_suffix_map):
+    """
+    Determines the breakout direction for a fired squeeze based on price action
+    relative to Bollinger Bands and Keltner Channels.
+    """
+    tf_suffix = tf_suffix_map.get(fired_tf_name)
+    if not tf_suffix:
+        return 'Neutral'
+
+    close = row.get('close')
+    bb_upper = row.get(f'BB.upper{tf_suffix}')
+    kc_upper = row.get(f'KltChnl.upper{tf_suffix}')
+    bb_lower = row.get(f'BB.lower{tf_suffix}')
+    kc_lower = row.get(f'KltChnl.lower{tf_suffix}')
+
+    if any(pd.isna(val) for val in [close, bb_upper, kc_upper, bb_lower, kc_lower]):
+        return 'Neutral'
+
+    # Positive breakout: Close is above the upper Bollinger Band, which is above the upper Keltner Channel.
+    if close > bb_upper and bb_upper > kc_upper:
+        return 'Bullish'
+    # Negative breakout: Close is below the lower Bollinger Band, which is below the lower Keltner Channel.
+    elif close < bb_lower and bb_lower < kc_lower:
+        return 'Bearish'
+    else:
+        return 'Neutral'
+
+
 def init_db():
     """Initializes the database and creates tables if they don't exist."""
     conn = sqlite3.connect(DB_FILE)
@@ -370,7 +398,7 @@ while True:
                     df_newly_fired['URL'] = "https://in.tradingview.com/chart/N8zfIJVK/?symbol=" + df_newly_fired['ticker'].apply(urllib.parse.quote)
                     df_newly_fired['logo'] = df_newly_fired['logoid'].apply(lambda x: f"https://s3-symbol-logo.tradingview.com/{x}.svg" if pd.notna(x) and x.strip() else '')
                     df_newly_fired['rvol'] = (df_newly_fired['volume|5'] / df_newly_fired['average_volume_10d_calc|5'].replace(0, np.nan)).fillna(0)
-                    df_newly_fired['momentum'] = df_newly_fired['MACD.hist'].apply(get_momentum_indicator)
+                    df_newly_fired['momentum'] = df_newly_fired.apply(lambda row: get_fired_breakout_direction(row, row['fired_timeframe'], tf_suffix_map), axis=1)
                     df_newly_fired['SqueezeCount'] = 1
                     df_newly_fired['highest_tf'] = df_newly_fired['fired_timeframe']
                     df_newly_fired['squeeze_strength'] = 'FIRED'
