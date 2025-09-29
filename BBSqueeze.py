@@ -339,7 +339,8 @@ while True:
         print(f"Found {len(fired_pairs)} (ticker, timeframe) pairs where squeeze has fired.")
 
         if fired_tickers:
-            query_fired = Query().select(*select_cols).where2(col('name').is_in(fired_tickers)).set_markets('india')
+            # Corrected the filtering method from .is_in() to .in_()
+            query_fired = Query().select(*select_cols).where(col('name').in_(fired_tickers)).set_markets('india')
             _, df_fired = query_fired.get_scanner_data()
 
             if df_fired is not None and not df_fired.empty:
