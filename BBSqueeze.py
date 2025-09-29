@@ -332,8 +332,15 @@ while True:
                 for tf_suffix, tf_name in tf_display_map.items():
                     if (row.get(f'BB.upper{tf_suffix}') < row.get(f'KltChnl.upper{tf_suffix}')) and (row.get(f'BB.lower{tf_suffix}') > row.get(f'KltChnl.lower{tf_suffix}')):
                         atr = row.get(f'ATR{tf_suffix}')
-                        close = row.get('close')
-                        volatility = (atr / close) * 100 if pd.notna(atr) and pd.notna(close) and close != 0 else 0
+                        sma20 = row.get(f'SMA20{tf_suffix}')
+                        bb_upper = row.get(f'BB.upper{tf_suffix}')
+
+                        # New volatility calculation
+                        if pd.notna(atr) and atr != 0 and pd.notna(sma20) and pd.notna(bb_upper):
+                            std = bb_upper - sma20
+                            volatility = std / atr
+                        else:
+                            volatility = 0
                         current_squeeze_pairs.append((row['ticker'], tf_name, volatility))
             df_in_squeeze['encodedTicker'] = df_in_squeeze['ticker'].apply(urllib.parse.quote)
             df_in_squeeze['URL'] = "https://in.tradingview.com/chart/N8zfIJVK/?symbol=" + df_in_squeeze['encodedTicker']
@@ -386,8 +393,16 @@ while True:
                         if tf_suffix:
                             prev_vol = prev_vol_map.get((ticker, fired_tf_name), 0.0) or 0
                             atr = row_data.get(f'ATR{tf_suffix}')
-                            close = row_data.get('close')
-                            current_vol = (atr / close) * 100 if pd.notna(atr) and pd.notna(close) and close != 0 else 0
+                            sma20 = row_data.get(f'SMA20{tf_suffix}')
+                            bb_upper = row_data.get(f'BB.upper{tf_suffix}')
+
+                            # New volatility calculation
+                            if pd.notna(atr) and atr != 0 and pd.notna(sma20) and pd.notna(bb_upper):
+                                std = bb_upper - sma20
+                                current_vol = std / atr
+                            else:
+                                current_vol = 0
+
                             if current_vol > prev_vol:
                                 fired_event = row_data.to_dict()
                                 fired_event.update({
