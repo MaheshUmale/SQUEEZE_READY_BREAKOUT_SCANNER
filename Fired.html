@@ -51,6 +51,11 @@
         .stock-logo { width: 24px; height: 24px; margin-bottom: 3px; }
         .stock-ticker { font-weight: 600; font-size: 11px; }
         .stock-info { font-size: 9px; color: #d1d5db; }
+        .time-ago {
+            font-size: 9px;
+            color: #9ca3af; /* gray-400 */
+            margin-top: 2px;
+        }
         .tooltip {
             position: absolute;
             text-align: center;
@@ -91,6 +96,20 @@
         const bullishColor = d3.scaleLinear().domain(rvolDomain).range(["#064e3b", "#10b981"]).clamp(true);
         const bearishColor = d3.scaleLinear().domain(rvolDomain).range(["#7f1d1d", "#ef4444"]).clamp(true);
 
+        function formatTimeAgo(timestamp) {
+            if (!timestamp) return '';
+            const now = new Date();
+            const firedTime = new Date(timestamp);
+            const seconds = Math.floor((now - firedTime) / 1000);
+
+            let interval = seconds / 60;
+            if (interval < 1) return Math.floor(seconds) + "s ago";
+            if (interval < 60) return Math.floor(interval) + "m ago";
+            interval = seconds / 3600;
+            if (interval < 24) return Math.floor(interval) + "h ago";
+            return Math.floor(seconds / 86400) + "d ago";
+        }
+
         function getCellColor(d) {
             if (d.momentum === 'Bullish') return bullishColor(d.rvol);
             if (d.momentum === 'Bearish') return bearishColor(d.rvol);
@@ -119,12 +138,14 @@
             enterCells.append("img").attr("class", "stock-logo");
             enterCells.append("div").attr("class", "stock-ticker");
             enterCells.append("div").attr("class", "stock-info");
+            enterCells.append("div").attr("class", "time-ago");
 
             const updateCells = enterCells.merge(selection);
             updateCells.style("background-color", d => getCellColor(d));
             updateCells.select(".stock-logo").attr("src", d => d.logo).style("display", d => d.logo ? 'block' : 'none');
             updateCells.select(".stock-ticker").text(d => d.name.replace('NSE:', ''));
             updateCells.select(".stock-info").text(d => `RVOL: ${d.rvol.toFixed(2)}`);
+            updateCells.select(".time-ago").text(d => formatTimeAgo(d.fired_timestamp));
         }
 
         function renderFiredHeatmap(data) {
