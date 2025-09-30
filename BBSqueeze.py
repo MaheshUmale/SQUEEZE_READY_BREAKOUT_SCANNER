@@ -71,6 +71,8 @@ def generate_heatmap_json(df, output_path):
         # Add optional volatility data if present in the DataFrame (for fired squeezes)
         if 'fired_timeframe' in df.columns:
             stock_data['fired_timeframe'] = row['fired_timeframe']
+        if 'fired_timestamp' in df.columns:
+             stock_data['fired_timestamp'] = row['fired_timestamp']
         if 'previous_volatility' in df.columns:
             stock_data['previous_volatility'] = row['previous_volatility']
         if 'current_volatility' in df.columns:
@@ -294,7 +296,6 @@ def save_fired_events_to_db(fired_events_df):
          row.get('current_volatility'), row.get('rvol'), row.get('HeatmapScore'), row.get('URL'), row.get('logo'))
         for _, row in fired_events_df.iterrows()
     ]
-    cursor = conn.cursor()
     cursor.executemany('''
         INSERT INTO fired_squeeze_events (
             fired_timestamp, ticker, fired_timeframe, momentum, previous_volatility,
