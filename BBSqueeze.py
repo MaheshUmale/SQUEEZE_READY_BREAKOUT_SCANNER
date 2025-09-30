@@ -60,7 +60,7 @@ def generate_heatmap_json(df, output_path):
         stock_data = {
             "name": row['ticker'],
             "value": row['HeatmapScore'],
-            "count": row['SqueezeCount'],
+            "count": row.get('SqueezeCount', 0),
             "rvol": row['rvol'],
             "url": row['URL'],
             "logo": row['logo'],
@@ -71,8 +71,8 @@ def generate_heatmap_json(df, output_path):
         # Add optional volatility data if present in the DataFrame (for fired squeezes)
         if 'fired_timeframe' in df.columns:
             stock_data['fired_timeframe'] = row['fired_timeframe']
-        if 'fired_timestamp' in df.columns:
-             stock_data['fired_timestamp'] = row['fired_timestamp']
+        if 'fired_timestamp' in df.columns and pd.notna(row['fired_timestamp']):
+             stock_data['fired_timestamp'] = row['fired_timestamp'].isoformat()
         if 'previous_volatility' in df.columns:
             stock_data['previous_volatility'] = row['previous_volatility']
         if 'current_volatility' in df.columns:
@@ -176,6 +176,37 @@ def get_squeeze_strength(row):
     else:
         return "N/A"
 
+def process_fired_events(events, tf_order_map, tf_suffix_map):
+    """
+    Processes a list of individual fired squeeze events, grouping them by ticker.
+    For each ticker, it determines the highest timeframe fired and counts the number of timeframes.
+    """
+    if not events:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(events)
+
+    # Helper to get the sort key for a display name
+    def get_tf_sort_key(display_name):
+        suffix = tf_suffix_map.get(display_name, '')
+        return tf_order_map.get(suffix, -1)
+
+    df['tf_order'] = df['fired_timeframe'].apply(get_tf_sort_key)
+
+    processed_events = []
+    for ticker, group in df.groupby('ticker'):
+        # Find the event with the highest timeframe for this ticker
+        highest_tf_event = group.loc[group['tf_order'].idxmax()]
+
+        # Create a new consolidated record
+        consolidated_event = highest_tf_event.to_dict()
+        consolidated_event['SqueezeCount'] = len(group)
+        consolidated_event['highest_tf'] = highest_tf_event['fired_timeframe'] # Use the highest timeframe as the primary
+
+        processed_events.append(consolidated_event)
+
+    return pd.DataFrame(processed_events)
+
 
 def get_fired_breakout_direction(row, fired_tf_name, tf_suffix_map):
     """
@@ -235,7 +266,9 @@ def init_db():
             rvol REAL,
             HeatmapScore REAL,
             URL TEXT,
-            logo TEXT
+            logo TEXT,
+            SqueezeCount INTEGER,
+            highest_tf TEXT
         )
     ''')
     # Create indexes for faster lookups
@@ -293,14 +326,16 @@ def save_fired_events_to_db(fired_events_df):
     now = datetime.now()
     data_to_insert = [
         (now, row['ticker'], row['fired_timeframe'], row.get('momentum'), row.get('previous_volatility'),
-         row.get('current_volatility'), row.get('rvol'), row.get('HeatmapScore'), row.get('URL'), row.get('logo'))
+         row.get('current_volatility'), row.get('rvol'), row.get('HeatmapScore'), row.get('URL'), row.get('logo'),
+         row.get('SqueezeCount'), row.get('highest_tf'))
         for _, row in fired_events_df.iterrows()
     ]
+    cursor = conn.cursor()
     cursor.executemany('''
         INSERT INTO fired_squeeze_events (
             fired_timestamp, ticker, fired_timeframe, momentum, previous_volatility,
-            current_volatility, rvol, HeatmapScore, URL, logo
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            current_volatility, rvol, HeatmapScore, URL, logo, SqueezeCount, highest_tf
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', data_to_insert)
     conn.commit()
     conn.close()
@@ -469,20 +504,20 @@ while True:
                                 fired_event = row_data.to_dict()
                                 fired_event.update({
                                     'fired_timeframe': fired_tf_name, 'previous_volatility': previous_volatility,
-                                    'current_volatility': current_volatility, 'volatility_increased': True
+                                    'current_volatility': current_volatility, 'volatility_increased': True,
+                                    'fired_timestamp': datetime.now()
                                 })
                                 newly_fired_events.append(fired_event)
                 if newly_fired_events:
-                    df_newly_fired = pd.DataFrame(newly_fired_events)
+                    # Consolidate events: group by ticker and find the highest timeframe event
+                    df_newly_fired = process_fired_events(newly_fired_events, tf_order_map, tf_suffix_map)
+
                     # --- "Fired Squeeze" Data Enrichment ---
                     df_newly_fired['URL'] = "https://in.tradingview.com/chart/N8zfIJVK/?symbol=" + df_newly_fired['ticker'].apply(urllib.parse.quote)
                     df_newly_fired['logo'] = df_newly_fired['logoid'].apply(lambda x: f"https://s3-symbol-logo.tradingview.com/{x}.svg" if pd.notna(x) and x.strip() else '')
-                    # Calculate RVOL using the volume data for the timeframe the squeeze fired on
-                    df_newly_fired['rvol'] = df_newly_fired.apply(lambda row: get_dynamic_rvol(row, row['fired_timeframe'], tf_suffix_map), axis=1)
-                    # Determine breakout direction (momentum) using the new price-based logic
-                    df_newly_fired['momentum'] = df_newly_fired.apply(lambda row: get_fired_breakout_direction(row, row['fired_timeframe'], tf_suffix_map), axis=1)
-                    df_newly_fired['SqueezeCount'] = 1  # Squeeze count is always 1 for a fired event
-                    df_newly_fired['highest_tf'] = df_newly_fired['fired_timeframe']
+                    # Calculate RVOL and momentum based on the highest timeframe that fired
+                    df_newly_fired['rvol'] = df_newly_fired.apply(lambda row: get_dynamic_rvol(row, row['highest_tf'], tf_suffix_map), axis=1)
+                    df_newly_fired['momentum'] = df_newly_fired.apply(lambda row: get_fired_breakout_direction(row, row['highest_tf'], tf_suffix_map), axis=1)
                     df_newly_fired['squeeze_strength'] = 'FIRED'
                     # Calculate a heatmap score using the new formula: RVOL * Momentum * Volatility
                     df_newly_fired['HeatmapScore'] = df_newly_fired['rvol'] * df_newly_fired['momentum'].map({'Bullish': 1, 'Neutral': 0.5, 'Bearish': -1}) * df_newly_fired['current_volatility']

@@ -56,6 +56,17 @@
             color: #9ca3af; /* gray-400 */
             margin-top: 2px;
         }
+        .squeeze-badge {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            font-size: 9px;
+            font-weight: bold;
+            padding: 1px 4px;
+            border-radius: 4px;
+        }
         .tooltip {
             position: absolute;
             text-align: center;
@@ -83,7 +94,7 @@
         </header>
 
         <div id="fired-container" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            <!-- Fired squeezes will be dynamically inserted here as a heatmap -->
+            <!-- Fired squeezes will be dynamically inserted here -->
         </div>
         <div class="tooltip"></div>
     </div>
@@ -117,12 +128,13 @@
         }
 
         function getTooltipHtml(d) {
-            const prevVol = d.previous_volatility.toFixed(2);
-            const currVol = d.current_volatility.toFixed(2);
+            const prevVol = d.previous_volatility ? d.previous_volatility.toFixed(2) : 'N/A';
+            const currVol = d.current_volatility ? d.current_volatility.toFixed(2) : 'N/A';
+            const countText = d.SqueezeCount > 1 ? `on ${d.SqueezeCount} TFs` : '';
             return `<strong>${d.name.replace('NSE:', '')}</strong><br/>` +
-                   `Fired on ${d.fired_timeframe}<br/>` +
+                   `Fired ${countText} (Highest: ${d.highest_tf})<br/>` +
                    `Momentum: <span style="color: ${getCellColor(d)};">${d.momentum}</span><br/>` +
-                   `Volatility: <strong style="color: #10b981;">${prevVol}% &rarr; ${currVol}%</strong><br/>` +
+                   `Volatility: <strong style="color: #10b981;">${prevVol} &rarr; ${currVol}</strong><br/>` +
                    `RVOL: ${d.rvol.toFixed(2)}`;
         }
 
@@ -134,6 +146,10 @@
                     tooltip.html(getTooltipHtml(d)).style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 28) + "px");
                 })
                 .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
+
+            if (selection.data().some(d => d.SqueezeCount > 0)) {
+                enterCells.append("div").attr("class", "squeeze-badge").text(d => d.SqueezeCount);
+            }
 
             enterCells.append("img").attr("class", "stock-logo");
             enterCells.append("div").attr("class", "stock-ticker");
@@ -156,8 +172,8 @@
                 firedContainer.html("");
             }
 
-            const tfOrder = ['Monthly', 'Weekly', '4H', '2H', '1H', '30m', '15m', '5m', '1m', 'Daily'];
-            const groupedData = d3.group(data, d => d.fired_timeframe);
+            const tfOrder = ['Monthly', 'Weekly', '4H', '2H', '1H', '30m', '15m', '5m', '1m', 'Daily', 'Unknown'];
+            const groupedData = d3.group(data, d => d.highest_tf);
             const sortedGroups = Array.from(groupedData.entries()).sort((a, b) => tfOrder.indexOf(a[0]) - tfOrder.indexOf(b[0]));
 
             const groups = firedContainer.selectAll('.timeframe-box').data(sortedGroups, d => d[0]);

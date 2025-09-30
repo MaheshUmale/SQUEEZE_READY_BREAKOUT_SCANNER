@@ -30,14 +30,6 @@
         .section-title.collapsed .arrow {
             transform: rotate(-90deg);
         }
-        .filter-btn.active {
-            background-color: #2563eb; /* blue-600 */
-            color: white;
-        }
-        .filter-btn {
-             background-color: #374151; /* gray-700 */
-             color: #d1d5db; /* gray-300 */
-        }
         .timeframe-box {
             background-color: #1f2937; /* gray-800 */
             border-radius: 8px;
@@ -156,7 +148,6 @@
             </nav>
         </header>
 
-
         <!-- Squeeze Fired Section -->
         <div id="fired-section-wrapper" class="mb-8">
             <h2 class="section-title"><span class="arrow">&#9662;</span>Squeeze Fired</h2>
@@ -215,10 +206,11 @@
             if (type === 'in_squeeze') {
                 const strengthHtml = d.squeeze_strength !== 'N/A' ? ` (${d.squeeze_strength})` : '';
                 squeezeHtml = `Squeeze on ${d.count} TFs (${d.highest_tf})${strengthHtml}<br/>`;
-            } else if (type === 'fired' && d.volatility_increased) {
-                const prevVol = d.previous_volatility.toFixed(2);
-                const currVol = d.current_volatility.toFixed(2);
-                squeezeHtml = `Fired on ${d.fired_timeframe}<br/>` +
+            } else if (type === 'fired') {
+                const prevVol = d.previous_volatility ? d.previous_volatility.toFixed(2) : 'N/A';
+                const currVol = d.current_volatility ? d.current_volatility.toFixed(2) : 'N/A';
+                const countText = d.SqueezeCount > 1 ? `on ${d.SqueezeCount} TFs` : '';
+                squeezeHtml = `Fired ${countText} (Highest: ${d.highest_tf})<br/>` +
                               `Volatility: <strong style="color: #10b981;">${prevVol} &rarr; ${currVol}</strong><br/>`;
             }
             return `<strong>${d.name.replace('NSE:', '')}</strong><br/>` + squeezeHtml + momentumHtml + `RVOL: ${d.rvol.toFixed(2)}`;
@@ -233,8 +225,8 @@
                 })
                 .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
 
-            if (type === 'in_squeeze') {
-                enterCells.append("div").attr("class", "squeeze-badge").text(d => d.count);
+            if (type === 'in_squeeze' || (type === 'fired' && selection.data().some(d => d.SqueezeCount > 0))) {
+                 enterCells.append("div").attr("class", "squeeze-badge").text(d => d.SqueezeCount);
             }
 
             enterCells.append("img").attr("class", "stock-logo");
@@ -261,8 +253,8 @@
                  firedContainer.html("");
             }
 
-            const tfOrder = ['Monthly', 'Weekly', '4H', '2H', '1H', '30m', '15m', '5m', '1m', 'Daily'];
-            const groupedData = d3.group(data, d => d.fired_timeframe);
+            const tfOrder = ['Monthly', 'Weekly', '4H', '2H', '1H', '30m', '15m', '5m', '1m', 'Daily', 'Unknown'];
+            const groupedData = d3.group(data, d => d.highest_tf);
             const sortedGroups = Array.from(groupedData.entries()).sort((a, b) => tfOrder.indexOf(a[0]) - tfOrder.indexOf(b[0]));
 
             const groups = firedContainer.selectAll('.timeframe-box').data(sortedGroups, d => d[0]);
@@ -277,7 +269,7 @@
 
             updateGroups.each(function([tf, stocks]) {
                 const sortedStocks = stocks.sort((a,b) => b.value - a.value);
-                const cells = d3.select(this).select('.grid-container').selectAll('.cell').data(sortedStocks, d => `${d.name}-${d.fired_timeframe}`);
+                const cells = d3.select(this).select('.grid-container').selectAll('.cell').data(sortedStocks, d => d.name);
                 cells.exit().remove();
                 renderCells(cells, 'fired');
             });
@@ -342,61 +334,6 @@
 
         function setupControls() {
             // Main section toggles
-            d3.selectAll('.section-title').on('click', function() {
-                const wrapper = d3.select(this.parentNode);
-                const container = wrapper.select('#fired-container, #in-squeeze-container');
-                if (container.empty()) return;
-
-                const isCollapsed = container.style('display') === 'none';
-
-                let displayStyle = 'block';
-                if (container.attr('id') === 'fired-container') {
-                    displayStyle = 'grid';
-                }
-
-                container.style('display', isCollapsed ? displayStyle : 'none');
-                d3.select(this).classed('collapsed', !isCollapsed);
-            });
-        }
-
-        function setupControls() {
-            // Main section toggles
-            d3.selectAll('.section-title').on('click', function() {
-                const wrapper = d3.select(this.parentNode);
-                const container = wrapper.select('#fired-container, #in-squeeze-container');
-                if (container.empty()) return;
-
-                const isCollapsed = container.style('display') === 'none';
-
-                let displayStyle = 'block';
-                if (container.attr('id') === 'fired-container') {
-                    displayStyle = 'grid';
-                }
-
-                container.style('display', isCollapsed ? displayStyle : 'none');
-                d3.select(this).classed('collapsed', !isCollapsed);
-            });
-        }
-
-        function setupControls() {
-            d3.selectAll('.section-title').on('click', function() {
-                const wrapper = d3.select(this.parentNode);
-                const container = wrapper.select('#fired-container, #in-squeeze-container');
-                if (container.empty()) return;
-
-                const isCollapsed = container.style('display') === 'none';
-
-                let displayStyle = 'block';
-                if (container.attr('id') === 'fired-container') {
-                    displayStyle = 'grid';
-                }
-
-                container.style('display', isCollapsed ? displayStyle : 'none');
-                d3.select(this).classed('collapsed', !isCollapsed);
-            });
-        }
-
-        function setupControls() {
             d3.selectAll('.section-title').on('click', function() {
                 const wrapper = d3.select(this.parentNode);
                 const container = wrapper.select('#fired-container, #in-squeeze-container');
