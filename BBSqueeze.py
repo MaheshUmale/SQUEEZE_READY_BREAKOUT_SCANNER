@@ -1,4 +1,5 @@
 import os
+import traceback
 import urllib.parse
 import json
 from time import sleep
@@ -7,6 +8,13 @@ import numpy as np
 import sqlite3
 from tradingview_screener import Query, col, And, Or
 import pandas as pd
+
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (pd.Timestamp, datetime)):
+            return obj.isoformat()  # Or obj.strftime('%Y-%m-%d %H:%M:%S')
+        return json.JSONEncoder.default(self, obj)
+
 
 # --- SQLite Timestamp Handling ---
 def adapt_datetime_iso(val):
@@ -20,6 +28,7 @@ def convert_timestamp(val):
 # Register the adapter and converter
 sqlite3.register_adapter(datetime, adapt_datetime_iso)
 sqlite3.register_converter("timestamp", convert_timestamp)
+sqlite3.register_converter("Timestamp", convert_timestamp)
 
 
 pd.set_option('display.expand_frame_repr', False)
@@ -84,7 +93,7 @@ def generate_heatmap_json(df, output_path):
 
     # Write the JSON file
     with open(output_path, 'w') as f:
-        json.dump(heatmap_data, f, indent=4)
+        json.dump(heatmap_data, f, indent=4, cls=CustomJSONEncoder)
     print(f"✅ Flat JSON successfully generated at '{output_path}'.")
 
 
@@ -290,6 +299,7 @@ def save_fired_events_to_db(fired_events_df):
     """Saves the processed fired squeeze events to the database."""
     if fired_events_df.empty: return
     conn = sqlite3.connect(DB_FILE, detect_types=sqlite3.PARSE_DECLTYPES)
+    cursor = conn.cursor()
     now = datetime.now()
     data_to_insert = [
         (now, row['ticker'], row['fired_timeframe'], row.get('momentum'), row.get('previous_volatility'),
@@ -500,6 +510,7 @@ while True:
 
     except Exception as e:
         print(f"An error occurred: {e}")
+        traceback.print_exc() 
 
     print(f"\n--- Waiting for {TIME_INTERVAL_SECONDS} seconds until the next scan ---\n")
     sleep(TIME_INTERVAL_SECONDS)
