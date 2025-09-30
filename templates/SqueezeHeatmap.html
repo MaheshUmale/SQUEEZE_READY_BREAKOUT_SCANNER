@@ -11,156 +11,75 @@
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         body { font-family: sans-serif; background-color: #111827; color: white; }
-        .section-title {
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 2px solid #4b5563;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            user-select: none;
-        }
-        .section-title .arrow {
-            margin-right: 12px;
-            transition: transform 0.2s;
-            font-size: 1rem;
-        }
-        .section-title.collapsed .arrow {
-            transform: rotate(-90deg);
-        }
-        .timeframe-box {
-            background-color: #1f2937; /* gray-800 */
-            border-radius: 8px;
-            padding: 1rem;
-            border: 1px solid #374151; /* gray-700 */
-        }
-        .grid-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-            gap: 6px;
-        }
-        .timeframe-group {
-            margin-bottom: 2rem;
-        }
-        .timeframe-title {
-            font-size: 1.25rem;
-            font-weight: 700;
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid #4b5563;
-            color: #d1d5db;
-        }
-        .momentum-title {
-            font-size: 1rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-            padding-bottom: 0.25rem;
-            border-bottom: 1px solid #374151;
-        }
+        .section-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid #4b5563; cursor: pointer; display: flex; align-items: center; user-select: none; }
+        .section-title .arrow { margin-right: 12px; transition: transform 0.2s; font-size: 1rem; }
+        .section-title.collapsed .arrow { transform: rotate(-90deg); }
+        .timeframe-box { background-color: #1f2937; border-radius: 8px; padding: 1rem; border: 1px solid #374151; }
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 6px; }
+        .timeframe-group { margin-bottom: 2rem; }
+        .timeframe-title { font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #4b5563; color: #d1d5db; }
+        .momentum-title { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; padding-bottom: 0.25rem; border-bottom: 1px solid #374151; }
         .bullish-col .momentum-title { color: #10b981; }
         .bearish-col .momentum-title { color: #ef4444; }
-        .timeframe-title .arrow {
-            margin-right: 8px;
-            transition: transform 0.2s;
-        }
-        .timeframe-title.collapsed .arrow {
-            transform: rotate(-90deg);
-        }
-        .momentum-columns {
-            display: flex;
-            gap: 1.5rem;
-        }
-        .bullish-col, .bearish-col {
-            flex: 1;
-        }
-        .cell {
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 4px;
-            border-radius: 4px;
-            cursor: pointer;
-            text-align: center;
-            height: 75px;
-            transition: transform 0.2s, background-color 0.2s;
-            border: 1px solid #374151;
-        }
-        .cell:hover {
-            transform: scale(1.05);
-            border-color: #9ca3af;
-        }
-        .stock-logo {
-            width: 24px;
-            height: 24px;
-            margin-bottom: 3px;
-        }
-        .stock-ticker {
-            font-weight: 600;
-            font-size: 11px;
-        }
-        .stock-info {
-            font-size: 9px;
-            color: #d1d5db;
-        }
-        .time-ago {
-            font-size: 9px;
-            color: #9ca3af; /* gray-400 */
-            margin-top: 2px;
-        }
-        .squeeze-badge {
-            position: absolute;
-            top: 2px;
-            right: 2px;
-            background-color: rgba(0, 0, 0, 0.6);
-            color: white;
-            font-size: 9px;
-            font-weight: bold;
-            padding: 1px 4px;
-            border-radius: 4px;
-        }
-        .tooltip {
-            position: absolute;
-            text-align: center;
-            padding: 8px;
-            font: 12px sans-serif;
-            background: #1f2937;
-            border: 1px solid #4b5563;
-            border-radius: 8px;
-            pointer-events: none;
-            opacity: 0;
-            color: white;
-        }
+        .timeframe-title .arrow { margin-right: 8px; transition: transform 0.2s; }
+        .timeframe-title.collapsed .arrow { transform: rotate(-90deg); }
+        .momentum-columns { display: flex; gap: 1.5rem; }
+        .bullish-col, .bearish-col { flex: 1; }
+        .cell { position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 4px; border-radius: 4px; cursor: pointer; text-align: center; height: 75px; transition: transform 0.2s, background-color 0.2s; border: 1px solid #374151; }
+        .cell:hover { transform: scale(1.05); border-color: #9ca3af; }
+        .stock-logo { width: 24px; height: 24px; margin-bottom: 3px; }
+        .stock-ticker { font-weight: 600; font-size: 11px; }
+        .stock-info { font-size: 9px; color: #d1d5db; }
+        .time-ago { font-size: 9px; color: #9ca3af; margin-top: 2px; }
+        .squeeze-badge { position: absolute; top: 2px; right: 2px; background-color: rgba(0, 0, 0, 0.6); color: white; font-size: 9px; font-weight: bold; padding: 1px 4px; border-radius: 4px; }
+        .tooltip { position: absolute; text-align: center; padding: 8px; font: 12px sans-serif; background: #1f2937; border: 1px solid #4b5563; border-radius: 8px; pointer-events: none; opacity: 0; color: white; }
+        #scan-btn.loading { cursor: not-allowed; background-color: #374151; }
+        #scan-btn.loading .spinner { display: inline-block; }
+        .spinner { display: none; width: 1rem; height: 1rem; border: 2px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; margin-right: 0.5rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="bg-gray-900">
     <div class="container mx-auto p-4 md:p-6">
         <header class="text-center mb-6">
             <h1 class="text-2xl md:text-3xl font-bold">Squeeze Dashboard</h1>
-            <nav class="mt-2">
-                <a href="SqueezeHeatmap.html" class="text-blue-400 font-bold border-b-2 border-blue-400 pb-1 px-2">Main Heatmap</a>
-                <a href="CompactHeatmap.html" class="text-gray-400 hover:text-blue-300 transition px-2">Compact View</a>
-                <a href="Formed.html" class="text-gray-400 hover:text-blue-300 transition px-2">Newly Formed</a>
-                <a href="Fired.html" class="text-gray-400 hover:text-blue-300 transition px-2">Recently Fired</a>
-            </nav>
         </header>
 
-        <!-- Squeeze Fired Section -->
-        <div id="fired-section-wrapper" class="mb-8">
-            <h2 class="section-title"><span class="arrow">&#9662;</span>Squeeze Fired</h2>
-            <div id="fired-container" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                <!-- Timeframe boxes will be dynamically inserted here -->
+        <!-- Cookie and Scan Control Section -->
+        <div class="bg-gray-800 p-4 rounded-lg mb-6 border border-gray-700">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div>
+                    <label for="sessionid" class="block text-sm font-medium text-gray-300">TradingView sessionid</label>
+                    <input type="text" id="sessionid" class="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm text-white focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2">
+                </div>
+                <div>
+                    <label for="sessionid_sign" class="block text-sm font-medium text-gray-300">TradingView sessionid_sign</label>
+                    <input type="text" id="sessionid_sign" class="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm text-white focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2">
+                </div>
+                <button id="scan-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md flex items-center justify-center transition">
+                    <span class="spinner"></span>
+                    <span class="btn-text">Run Scan</span>
+                </button>
             </div>
+            <p id="scan-status" class="text-center text-sm text-gray-400 mt-3"></p>
         </div>
 
-        <!-- In Squeeze Section -->
-        <div id="in-squeeze-section-wrapper">
-            <h2 class="section-title"><span class="arrow">&#9662;</span>In Squeeze</h2>
-            <div id="in-squeeze-container">
-                <!-- Content will be dynamically inserted here -->
+        <!-- Main Content Area -->
+        <div id="main-content">
+            <!-- Squeeze Fired Section -->
+            <div id="fired-section-wrapper" class="mb-8">
+                <h2 class="section-title"><span class="arrow">&#9662;</span>Squeeze Fired</h2>
+                <div id="fired-container" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                    <p class='col-span-full text-gray-400 text-center py-4'>Run a scan to see recently fired squeezes.</p>
+                </div>
+            </div>
+
+            <!-- In Squeeze Section -->
+            <div id="in-squeeze-section-wrapper">
+                <h2 class="section-title"><span class="arrow">&#9662;</span>In Squeeze</h2>
+                <div id="in-squeeze-container">
+                    <p class='text-gray-400 text-center py-4'>Run a scan to see stocks currently in a squeeze.</p>
+                </div>
             </div>
         </div>
 
@@ -171,8 +90,10 @@
         const firedContainer = d3.select("#fired-container");
         const inSqueezeContainer = d3.select("#in-squeeze-container");
         const tooltip = d3.select(".tooltip");
-        let refreshInterval;
-        let fullInSqueezeData = [];
+        const scanBtn = document.getElementById('scan-btn');
+        const scanStatus = document.getElementById('scan-status');
+
+        let allScanData = {};
 
         // --- Color Scales ---
         const rvolDomain = [0, 5];
@@ -185,13 +106,11 @@
             const now = new Date();
             const firedTime = new Date(timestamp);
             const seconds = Math.floor((now - firedTime) / 1000);
-
-            let interval = seconds / 60;
-            if (interval < 1) return Math.floor(seconds) + "s ago";
-            if (interval < 60) return Math.floor(interval) + "m ago";
-            interval = seconds / 3600;
-            if (interval < 24) return Math.floor(interval) + "h ago";
-            return Math.floor(seconds / 86400) + "d ago";
+            if (seconds < 60) return `${seconds}s ago`;
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `${minutes}m ago`;
+            const hours = Math.floor(minutes / 60);
+            return `${hours}h ago`;
         }
 
         function getCellColor(d) {
@@ -209,7 +128,7 @@
             } else if (type === 'fired') {
                 const prevVol = d.previous_volatility ? d.previous_volatility.toFixed(2) : 'N/A';
                 const currVol = d.current_volatility ? d.current_volatility.toFixed(2) : 'N/A';
-                const countText = d.SqueezeCount > 1 ? `on ${d.SqueezeCount} TFs` : '';
+                const countText = d.count > 1 ? `on ${d.count} TFs` : '';
                 squeezeHtml = `Fired ${countText} (Highest: ${d.highest_tf})<br/>` +
                               `Volatility: <strong style="color: #10b981;">${prevVol} &rarr; ${currVol}</strong><br/>`;
             }
@@ -225,8 +144,8 @@
                 })
                 .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
 
-            if (type === 'in_squeeze' || (type === 'fired' && selection.data().some(d => d.SqueezeCount > 0))) {
-                 enterCells.append("div").attr("class", "squeeze-badge").text(d => d.SqueezeCount);
+            if (type === 'in_squeeze' || (type === 'fired' && selection.data().some(d => d.count > 0))) {
+                 enterCells.append("div").attr("class", "squeeze-badge").text(d => d.count);
             }
 
             enterCells.append("img").attr("class", "stock-logo");
@@ -246,12 +165,8 @@
         }
 
         function renderFired(data) {
-            if (data.length === 0) {
-                firedContainer.html("<p class='col-span-full text-gray-400 text-center py-4'>No squeezes have fired with increased volatility recently.</p>");
-                return;
-            } else {
-                 firedContainer.html("");
-            }
+            firedContainer.html(data.length === 0 ? "<p class='col-span-full text-gray-400 text-center py-4'>No squeezes have fired with increased volatility.</p>" : "");
+            if (data.length > 0) firedContainer.html("");
 
             const tfOrder = ['Monthly', 'Weekly', '4H', '2H', '1H', '30m', '15m', '5m', '1m', 'Daily', 'Unknown'];
             const groupedData = d3.group(data, d => d.highest_tf);
@@ -276,7 +191,9 @@
         }
 
         function renderInSqueeze(data) {
-            inSqueezeContainer.html(data.length === 0 ? "<p class='text-gray-400'>No stocks match the current filter.</p>" : "");
+            inSqueezeContainer.html(data.length === 0 ? "<p class='text-gray-400 text-center py-4'>No stocks match the criteria.</p>" : "");
+             if (data.length > 0) inSqueezeContainer.html("");
+
 
             const tfOrder = ['Monthly', 'Weekly', '4H', '2H', '1H', '30m', '15m', '5m', '1m', 'Daily', 'Unknown'];
             const groupedData = d3.group(data, d => d.highest_tf);
@@ -286,7 +203,6 @@
             groups.exit().remove();
 
             const enterGroups = groups.enter().append('div').attr('class', 'timeframe-group');
-
             const title = enterGroups.append('h2').attr('class', 'timeframe-title');
             title.append('span').attr('class', 'arrow').html('&#9662;');
             title.append('span');
@@ -303,7 +219,6 @@
 
             const updateGroups = enterGroups.merge(groups);
             updateGroups.select('.timeframe-title span:last-child').text(d => `${d[0]} (${d[1].length})`);
-
             updateGroups.select('.timeframe-title').on('click', function() {
                 const group = d3.select(this.parentNode);
                 const box = group.select('.timeframe-box');
@@ -315,17 +230,13 @@
             updateGroups.each(function([tf, stocks]) {
                 const bullishStocks = stocks.filter(s => s.momentum === 'Bullish').sort((a,b) => b.value - a.value);
                 const bearishStocks = stocks.filter(s => s.momentum === 'Bearish').sort((a,b) => b.value - a.value);
-
                 const bullishColEl = d3.select(this).select('.bullish-col');
                 const bearishColEl = d3.select(this).select('.bearish-col');
-
                 bullishColEl.style('display', bullishStocks.length > 0 ? null : 'none');
                 bearishColEl.style('display', bearishStocks.length > 0 ? null : 'none');
-
                 const bullishCells = bullishColEl.select('.grid-container').selectAll('.cell').data(bullishStocks, d => d.name);
                 bullishCells.exit().remove();
                 renderCells(bullishCells, 'in_squeeze');
-
                 const bearishCells = bearishColEl.select('.grid-container').selectAll('.cell').data(bearishStocks, d => d.name);
                 bearishCells.exit().remove();
                 renderCells(bearishCells, 'in_squeeze');
@@ -333,46 +244,56 @@
         }
 
         function setupControls() {
-            // Main section toggles
             d3.selectAll('.section-title').on('click', function() {
                 const wrapper = d3.select(this.parentNode);
                 const container = wrapper.select('#fired-container, #in-squeeze-container');
                 if (container.empty()) return;
-
                 const isCollapsed = container.style('display') === 'none';
-
-                let displayStyle = 'block';
-                if (container.attr('id') === 'fired-container') {
-                    displayStyle = 'grid';
-                }
-
+                let displayStyle = container.attr('id') === 'fired-container' ? 'grid' : 'block';
                 container.style('display', isCollapsed ? displayStyle : 'none');
                 d3.select(this).classed('collapsed', !isCollapsed);
             });
         }
 
-        async function loadData() {
-            try {
-                const [firedData, inSqueezeData] = await Promise.all([
-                    d3.json(`treemap_data_fired.json?t=${new Date().getTime()}`),
-                    d3.json(`treemap_data_in_squeeze.json?t=${new Date().getTime()}`)
-                ]);
+        async function runScan() {
+            scanBtn.classList.add('loading');
+            scanBtn.disabled = true;
+            scanStatus.textContent = 'Scanning... This may take a moment.';
 
-                fullInSqueezeData = inSqueezeData;
-                renderFired(firedData);
-                renderInSqueeze(fullInSqueezeData);
+            const sessionid = document.getElementById('sessionid').value;
+            const sessionid_sign = document.getElementById('sessionid_sign').value;
+
+            try {
+                const response = await fetch('/scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionid, sessionid_sign })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                }
+
+                allScanData = await response.json();
+                renderFired(allScanData.fired);
+                renderInSqueeze(allScanData.in_squeeze);
+                scanStatus.textContent = `Scan complete. Found ${allScanData.in_squeeze.length} stocks in a squeeze and ${allScanData.fired.length} recently fired.`;
 
             } catch (error) {
-                console.error("Failed to load data:", error);
-                firedContainer.html("<p class='text-center text-red-500'>Could not load 'Fired' data.</p>");
-                inSqueezeContainer.html("<p class='text-center text-red-500'>Could not load 'In Squeeze' data.</p>");
+                console.error("Failed to run scan:", error);
+                scanStatus.textContent = `Error: ${error.message}`;
+                firedContainer.html("<p class='text-center text-red-500'>Scan failed. Please check the console for details.</p>");
+                inSqueezeContainer.html("<p class='text-center text-red-500'>Scan failed.</p>");
+            } finally {
+                scanBtn.classList.remove('loading');
+                scanBtn.disabled = false;
             }
         }
 
         // Initial setup
-        loadData();
+        scanBtn.addEventListener('click', runScan);
         setupControls();
-        refreshInterval = setInterval(loadData, 120000);
     </script>
 </body>
 </html>

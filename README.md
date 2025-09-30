@@ -1,94 +1,79 @@
-# Real-Time Multi-Timeframe Squeeze Scanner & Dashboard
+# Real-Time Multi-Timeframe Squeeze Scanner Web Application
 
-This project provides a powerful, real-time scanner that identifies stocks in a TTM Squeeze across multiple timeframes. It's designed to help traders spot potential volatility breakouts by tracking when squeezes form and when they fire with increased volatility.
+This project is an interactive web application that identifies stocks in a TTM Squeeze across multiple timeframes. It's designed to help traders spot potential volatility breakouts by allowing them to run on-demand scans using their own TradingView session for authenticated requests.
 
-The results are visualized through a responsive, multi-page web dashboard that updates automatically.
+The results are visualized through a dynamic, single-page dashboard.
 
 ## Key Features
 
+-   **Interactive Web App**: A Flask-based web application replaces the previous static file generation, providing a modern and interactive user experience.
+-   **On-Demand Scanning**: Run scans whenever you want directly from the web interface.
+-   **Session Cookie Authentication**: Uses your TradingView `sessionid` and `sessionid_sign` cookies to run authenticated scans, ensuring access to the latest data.
 -   **Multi-Timeframe Scanning**: Monitors stocks for squeezes on timeframes from 1 minute to 1 month.
--   **In-Squeeze Heatmap**: A comprehensive heatmap view of all stocks currently in a squeeze, grouped by the highest timeframe.
--   **Newly Formed Squeezes**: A dedicated real-time list of squeezes that have just formed in the latest scan, allowing you to catch them early.
--   **Intelligent Fired Squeezes**: A real-time list of squeezes that have not just fired, but have done so with a verifiable *increase in volatility*, indicating a more significant breakout.
--   **Responsive Dashboard**: The user interface is designed to work seamlessly on both desktop and mobile devices.
--   **Detailed Information**: Tooltips and list views provide key data points like momentum, relative volume (RVOL), and volatility changes.
-
-## The Dashboard Views
-
-The application is split into several focused pages:
-
-1.  **Main Heatmap**: The primary dashboard that contains two main sections: "Squeeze Fired" and "In Squeeze". Both sections present data in a compact, time-grouped grid, providing a comprehensive overview of all squeeze activity.
-2.  **Compact View**: A dedicated, standalone view of the "In Squeeze" data, presented in the same compact, time-grouped format as the main heatmap for a focused look at stocks currently in a squeeze.
-3.  **Newly Formed**: A real-time list showing only the squeezes that have been identified in the most recent scan cycle.
-4.  **Recently Fired**: A real-time list showing only the squeezes that have fired *and* have confirmed an increase in volatility since the squeeze began.
+-   **Unified Dashboard**: All data—"In Squeeze," "Newly Formed," and "Recently Fired"—is now presented in a single, consolidated view.
+-   **Intelligent Fired Squeezes**: Identifies squeezes that have not just fired, but have done so with a verifiable *increase in volatility*.
+-   **Detailed Information**: Tooltips provide key data points like momentum, relative volume (RVOL), and volatility changes.
 
 ## How It Works
 
-The scanner operates through a sophisticated, multi-step process to identify and qualify squeeze opportunities.
+The application operates on a client-server model, providing a seamless and interactive experience.
 
-### 1. Initial Scan & Squeeze Detection
-The `BBSqueeze.py` script continuously scans the market using the following core logic:
-- **The Squeeze Condition**: It identifies stocks where the **Bollinger Bands (BB)** are inside the **Keltner Channels (KC)**. This indicates a period of low volatility and a potential for a powerful move.
-- **Filtering**: It applies a set of baseline filters to ensure data quality, including minimum price, volume, and traded value, while focusing on primary common stocks on the NSE.
+### 1. Frontend Interface
+The main interface is a single-page application built with HTML, TailwindCSS, and D3.js.
+-   It provides input fields for you to enter your TradingView session cookies.
+-   A "Run Scan" button triggers the backend scanning process on-demand.
+-   The dashboard dynamically renders the results returned from the backend without needing to reload the page.
 
-### 2. Squeeze Strength Calculation
-Once a stock is identified as being in a squeeze, the script calculates its **strength**:
-- The strength is determined by the ratio of the Keltner Channel width to the Bollinger Band width (`KC Width / BB Width`).
-- Squeezes are categorized as **"STRONG"** (ratio >= 1.5) or **"VERY STRONG"** (ratio >= 2).
-- **Only "STRONG" and "VERY STRONG" squeezes are kept for further processing.**
+### 2. Flask Backend
+The backend is a Python Flask application (`app.py`) that exposes a `/scan` API endpoint.
+-   When you click "Run Scan," the frontend sends your session cookies to this endpoint.
+-   The backend then executes the core scanning logic.
 
-### 3. Event Detection: Formed vs. Fired
-The script maintains a history of squeezes in a local database to identify two key events:
-- **Newly Formed**: A stock that is in a strong squeeze *now* but was not in the previous scan.
-- **Recently Fired**: A stock that was in a strong squeeze in the previous scan but is *not* anymore, indicating the squeeze has "fired" and volatility is expanding.
+### 3. Core Scanning Logic
+The backend process remains as sophisticated as before:
+-   **The Squeeze Condition**: It identifies stocks where the **Bollinger Bands (BB)** are inside the **Keltner Channels (KC)**.
+-   **Filtering**: It applies baseline filters for price, volume, and traded value.
+-   **Squeeze Strength**: It calculates the squeeze strength and filters for only **"STRONG"** and **"VERY STRONG"** squeezes.
+-   **Event Detection**: It compares the current scan against the previous scan (stored in a local SQLite database) to identify "Newly Formed" and "Recently Fired" events.
+-   **Fired Squeeze Analysis**: It validates fired squeezes by confirming an increase in volatility and determining the breakout direction.
+-   **Dynamic RVOL**: Relative Volume is calculated dynamically based on the most relevant timeframe for each event.
 
-### 4. Fired Squeeze Analysis
-For a "fired" squeeze to be considered a valid breakout signal, it must pass two additional checks:
-- **Increased Volatility**: The script calculates volatility using the formula `(BB Upper - SMA20) / ATR`. A fired event is only valid if the current volatility is greater than the volatility recorded when the squeeze first formed.
-- **Breakout Direction**: The direction of the breakout is determined by price action, not just momentum indicators:
-    - **Bullish Breakout**: `Close > BB.upper` AND `BB.upper > KC.upper`.
-    - **Bearish Breakout**: `Close < BB.lower` AND `BB.lower < KC.lower`.
-
-### 5. Dynamic RVOL Calculation
-To provide the most accurate measure of volume strength, Relative Volume (RVOL) is calculated dynamically based on the relevant timeframe for each event:
-- **For "In Squeeze" stocks**, RVOL is calculated for the highest timeframe the stock is currently in a squeeze on.
-- **For "Fired Squeeze" stocks**, RVOL is calculated for the timeframe the squeeze fired on.
-
-### 6. Data Generation & Visualization
-The script generates three JSON files with the processed data, which are then fetched by the HTML pages to create the real-time dashboard visualizations.
+### 4. Data Visualization
+Instead of generating static files, the backend returns a single JSON object containing all the processed data (`in_squeeze`, `formed`, `fired`). The frontend then uses D3.js to parse this data and render the interactive heatmaps and lists.
 
 ## Setup and Usage
 
 ### 1. Install Dependencies
 
-First, ensure you have Python 3 installed. Then, install the required packages using pip:
+First, ensure you have Python 3 installed. Then, install the required packages:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Run the Scanner Backend
+### 2. Run the Web Application
 
-Open a terminal and run the Python script. It's best to run it in the background so it can continue working.
-
-```bash
-python3 BBSqueeze.py &
-```
-
-The script will start scanning and will generate the JSON data files in the same directory.
-
-### 3. View the Dashboard
-
-To view the web interface, you need to serve the files from a local web server to avoid browser security errors (CORS). Python has a simple one built-in.
-
-In your terminal, from the project directory, run:
+Open a terminal in the project directory and run the Flask app:
 
 ```bash
-python3 -m http.server
+python3 app.py
 ```
 
-This will start a server, usually on port 8000. Now, open your web browser and navigate to:
+The application will start, and you can access it by opening your web browser and navigating to:
 
-**http://localhost:8000/SqueezeHeatmap.html**
+**http://localhost:5001**
 
-From there, you can use the navigation links to switch between the different views. The data on the pages will refresh automatically.
+### 3. How to Use the Dashboard
+
+1.  **Get Your Session Cookies**:
+    *   Open your web browser and log in to your TradingView account.
+    *   Open the browser's Developer Tools (usually by pressing F12).
+    *   Go to the "Application" or "Storage" tab.
+    *   Find the "Cookies" section and select `https://www.tradingview.com`.
+    *   Find the `sessionid` and `sessionid_sign` cookies and copy their values.
+
+2.  **Run a Scan**:
+    *   Paste the copied `sessionid` and `sessionid_sign` values into the corresponding input fields on the dashboard.
+    *   Click the **"Run Scan"** button.
+
+The application will perform a live scan and display the results on the page. You can re-run the scan at any time by clicking the button again.

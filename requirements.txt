@@ -1,3 +1,4 @@
 pandas
 pandas-ta
 tradingview-screener
+Flask
